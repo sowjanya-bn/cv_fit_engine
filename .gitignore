@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+data/forms/users/sowjanya.yaml
+data/runs/
+EOF

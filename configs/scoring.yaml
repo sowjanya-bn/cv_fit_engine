@@ -1,0 +1,5 @@
+weights:
+  skill_overlap: 0.4
+  tool_overlap: 0.3
+  domain_match: 0.2
+  seniority_match: 0.1

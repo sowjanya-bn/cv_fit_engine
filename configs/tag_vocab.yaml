@@ -1,0 +1,42 @@
+skills:
+  - rag
+  - knowledge-graphs
+  - nlp
+  - machine-learning
+  - distributed-systems
+  - api-design
+  - system-design
+  - data-quality
+  - evaluation
+  - prompt-engineering
+  - feature-engineering
+
+tools:
+  - python
+  - java
+  - sql
+  - rdf
+  - sparql
+  - docker
+  - aws
+  - elasticsearch
+  - xgboost
+  - shap
+  - git
+  - cicd
+
+domain:
+  - finance
+  - telecom
+  - cultural-heritage
+  - consulting
+  - research
+  - enterprise
+  - ai-systems
+
+seniority:
+  - entry
+  - early-career
+  - mid-level
+  - lead
+  - research

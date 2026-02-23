@@ -1,0 +1,403 @@
+resume_schema_version: 1
+_help: Fill this file as a form. Keep IDs stable once created. Dates can be ISO (YYYY-MM)
+  or raw text if unsure.
+profile:
+  person:
+    full_name: Naga Sowjanya Barla
+    location: Liverpool, UK
+    email: nagasowjanya.barla@gmail.com
+    phone: +44 7440 115 316
+    links:
+      linkedin: https://www.linkedin.com/in/naga-sowjanya-barla
+      github: https://github.com/sowjanya-bn
+      website: ''
+  headlines:
+  - id: headline_primary
+    text: AI Engineer
+  summaries:
+  - id: summary_primary
+    text: AI Engineer with 13 years of experience building secure, enterprise-grade
+      software systems. Strong background in distributed services and API-led design,
+      with recent focus on LLM-powered applications, knowledge-graph-backed architectures
+      and Retrieval-Augmented Generation pipelines. Experienced in designing, evaluating
+      and deploying AI systems with an emphasis on reliability, traceability and production
+      integration.
+  skills:
+    categories:
+      - name: Languages
+        items:
+          - Python
+          - Java
+          - SQL
+
+      - name: Frameworks
+        items:
+          - Spring Boot
+          - FastAPI
+
+      - name: Data/ML
+        items:
+          - Retrieval-Augmented Generation
+          - Large Language Models
+          - Natural Language Processing
+          - Knowledge Graphs
+          - Machine Learning
+          - SHAP
+          - XGBoost
+
+      - name: Cloud/DevOps
+        items:
+          - AWS
+          - CI/CD
+          - Docker
+          - Monitoring
+
+      - name: Tools
+        items:
+          - RDF
+          - SPARQL
+          - Elasticsearch
+          - Git
+  interests: Interests include practical AI-enabled tools, enterprise system design
+    and applied machine learning.
+  certifications:
+  - AI Consulting Micro Internship (Springpod)
+  - Oracle Certified Java Programmer
+  - Oracle Certified Java EE Web Component Developer
+blocks:
+  experience:
+  - id: exp_001
+    role: AI Consulting Micro Internship
+    company: Springpod (Remote)
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Analysed client-style briefs to frame AI opportunities and solution approaches.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Produced consulting-style deliverables assessing feasibility, value and
+        implementation fit.
+      kind: impact
+      metrics: []
+    - id: b_0003
+      text: Evaluated applied AI use cases using structured decision criteria.
+      kind: impact
+      metrics: []
+    tags:
+      skills: [ai-strategy, solution-design, evaluation, use-case-analysis]
+      tools: []
+      domain: [consulting]
+      seniority: [entry]
+  - id: exp_002
+    role: 'Summer Research Intern : AI \& Knowledge Graphs'
+    company: University of Liverpool, United Kingdom
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Built Python-based LLM pipelines for structured metadata extraction.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Modelled and queried knowledge graphs using RDF and SPARQL.
+      kind: impact
+      metrics: []
+    - id: b_0003
+      text: Evaluated AI-assisted workflows using defined quality and consistency
+        metrics.
+      kind: impact
+      metrics: []
+    - id: b_0004
+      text: Worked with structured datasets using Python and query-based retrieval,
+        validating data consistency and completeness.
+      kind: impact
+      metrics: []
+    - id: b_0005
+      text: Implemented checks to ensure data quality and correctness across extracted
+        and generated outputs.
+      kind: impact
+      metrics: []
+    tags:
+        skills: [rag, llm, knowledge-graphs, nlp, data-quality, evaluation]
+        tools: [python, rdf, sparql]
+        domain: [research, cultural-heritage]
+        seniority: [research]
+  - id: exp_003
+    role: Programmer
+    company: Tata Consultancy Services, United Kingdom
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Developed and maintained large-scale SIP-based telecom platforms.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Designed high-performance APIs for provisioning and network management.
+      kind: impact
+      metrics: []
+    - id: b_0003
+      text: Engineered distributed data replication pipelines across multiple regions.
+      kind: impact
+      metrics: []
+    - id: b_0004
+      text: Built secure gateway services with access control for regulated environments.
+      kind: impact
+      metrics: []
+    - id: b_0005
+      text: Supported data-driven and AI-adjacent initiatives through Python prototyping.
+      kind: impact
+      metrics: []
+    tags:
+      skills: [distributed-systems, api-design, backend-development, data-pipelines]
+      tools: [java, python]
+      domain: [telecom, enterprise]
+      seniority: [mid-level]
+  - id: exp_004
+    role: Development Team Lead
+    company: Tata Consultancy Services, United Kingdom
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Led delivery of scalable backend systems in cross-functional teams.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Improved system reliability and performance through structured troubleshooting.
+      kind: impact
+      metrics: []
+    - id: b_0003
+      text: Used Elasticsearch for monitoring, analytics and operational insight.
+      kind: impact
+      metrics: []
+    - id: b_0004
+      text: Worked with large operational datasets, focusing on accuracy, consistency,
+        and reliability of data used in production systems.
+      kind: impact
+      metrics: []
+    - id: b_0005
+      text: Ensured compliance with security and regulatory standards.
+      kind: impact
+      metrics: []
+    tags:
+      skills: [backend-architecture, system-design, reliability, performance-optimization, api-design]
+      tools: [java, elasticsearch]
+      domain: [telecom, enterprise]
+      seniority: [lead]
+  - id: exp_005
+    role: IT Analyst
+    company: Tata Consultancy Services, India
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Automated workflow and work-order management systems.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Built proof-of-concept fault-handling solutions for network platforms.
+      kind: impact
+      metrics: []
+    - id: b_0003
+      text: Updated data retention processes to support GDPR-aligned compliance.
+      kind: impact
+      metrics: []
+    tags:
+      skills: [automation, workflow-design, compliance, data-governance]
+      tools: []
+      domain: [telecom, enterprise]
+      seniority: [early-career]
+  - id: exp_006
+    role: Assistant System Engineer → System Engineer
+    company: Tata Consultancy Services, India
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Developed provisioning systems across front-end and back-end components.
+      kind: impact
+      metrics: []
+    - id: b_0002
+      text: Supported service activation workflows through testing and troubleshooting.
+      kind: impact
+      metrics: []
+    tags:
+      skills: [backend-development, provisioning-systems, testing, troubleshooting]
+      tools: [java]
+      domain: [telecom, enterprise]
+      seniority: [early-career]
+  projects:
+  - id: proj_001
+    title: 'MSc Dissertation: Knowledge Graph RAG System'
+    context: ''
+    links: []
+    start: ''
+    end: ''
+    bullets:
+    - id: b_0001
+      text: Designed and implemented an end-to-end knowledge-graph-first RAG pipeline
+        for personalised narrative generation.
+      kind: technical
+      metrics: []
+    - id: b_0002
+      text: Built and curated a 20K+ triple RDF knowledge graph using Music Meta and
+        Schema.org vocabularies.
+      kind: technical
+      metrics: []
+    - id: b_0003
+      text: Implemented multiple retrieval strategies including KG-RAG, Hybrid RAG
+        and Graph RAG.
+      kind: technical
+      metrics: []
+    - id: b_0004
+      text: Developed Python-based orchestration and evaluation pipelines to assess
+        grounding accuracy, coverage and coherence.\\[4pt]
+      kind: technical
+      metrics: []
+    tags:
+      skills: [rag, knowledge-graphs, llm, evaluation, orchestration, graph-modeling]
+      tools: [python, rdf, sparql]
+      domain: [research, cultural-heritage]
+  - id: proj_002
+    title: Pre-market and After-hours Stock Price Analysis
+    context: ''
+    links: []
+    start: ''
+    end: ''
+    bullets:
+    - id: b_0001
+      text: Constructed event-window datasets aligned to quarterly earnings announcements.
+      kind: technical
+      metrics: []
+    - id: b_0002
+      text: Engineered features from OHLCV data, EPS surprises and structured news
+        sentiment.
+      kind: technical
+      metrics: []
+    - id: b_0003
+      text: Benchmarked ML models including XGBoost, achieving approximately 80\%
+        accuracy, and analysed drivers using SHAP.\\[4pt]
+      kind: technical
+      metrics: []
+    tags:
+      skills: [machine-learning, feature-engineering, model-evaluation, financial-analysis]
+      tools: [python, xgboost, shap]
+      domain: [finance]
+  - id: proj_003
+    title: 'TailorRAG : Retrieval-Augmented Job Application Assistant'
+    context: ''
+    links: []
+    start: ''
+    end: ''
+    bullets:
+    - id: b_0001
+      text: Designed and implemented a RAG-based system to analyse job descriptions
+        and generate tailored CV and cover letter content.
+      kind: technical
+      metrics: []
+    - id: b_0002
+      text: Built document parsing and retrieval pipelines combining structured user
+        profiles with job-specific context.
+      kind: technical
+      metrics: []
+    - id: b_0003
+      text: Implemented prompt orchestration and evaluation logic to ensure relevance,
+        consistency and controllable outputs.
+      kind: technical
+      metrics: []
+    tags:
+      skills: [rag, retrieval, prompt-engineering, document-parsing, evaluation, api-design]
+      tools: [python, docker]
+      domain: [ai-systems]
+  education:
+  - id: edu_001
+    degree: MSc Data Science and Artificial Intelligence
+    institution: University of Liverpool, United Kingdom
+    location: ''
+    start: ''
+    end: ''
+    grade: ''
+    modules: []
+    notes: 'Dissertation: RAG-based Digital Storytelling on Music Knowledge Graphs'
+  - id: edu_002
+    degree: B.E. Electronics and Communication Engineering
+    institution: GITAM University, India
+    location: ''
+    start: ''
+    end: ''
+    grade: ''
+    modules: []
+    notes: ''
+  achievements:
+    - id: ach_001
+      title: Paper accepted at ESWC 2026
+      date: 2026
+      evidence: European Semantic Web Conference (ESWC)
+      notes: >
+        First-author research paper titled
+        "Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling"
+        accepted to ESWC 2026.
+      tags:
+        skills: [knowledge-graphs, rag, semantic-web, research]
+        tools: [rdf, sparql]
+        domain: [research, semantic-web]
+
+    - id: ach_002
+      title: Hackathon Winner – Reinventing the British Music Experience
+      date: 2025
+      evidence: University of Liverpool Hackathon
+      notes: >
+        Designed a personalised museum experience concept where each visitor
+        receives a dynamically generated narrative journey tailored to their
+        profile, enabling a different cultural experience on every visit.
+        Proposed a knowledge-graph-driven storytelling engine to support
+        adaptive content sequencing.
+      tags:
+        skills: [personalisation, knowledge-graphs, narrative-generation, ai-systems]
+        tools: [python]
+        domain: [cultural-heritage, experience-design, hackathon]
+
+
+
+  publications:
+  - id: pub_000
+    title: ''
+    venue: ''
+    year: ''
+    authors: ''
+    links: []
+    notes: ''
+variants:
+  _help: Optional. Define role-specific versions without editing the base blocks.
+  summary_by_role:
+  - role_key: ai_engineer
+    summary_id: summary_primary
+  include_rules:
+  - role_key: ai_engineer
+    include:
+      experience: []
+      projects: []
+    exclude:
+      experience: []
+      projects: []

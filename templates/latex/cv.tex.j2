@@ -1,0 +1,56 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=0pt}
+
+\begin{document}
+
+{\LARGE \textbf{ {{ person.full_name }} }}\\
+{{ person.location }}\\
+\href{mailto:{{ person.email }}}{{ person.email }}{% if person.phone %} \ \ {{ person.phone }}{% endif %}\\
+{% if person.links.linkedin %}\href{ {{ person.links.linkedin }} }{LinkedIn}{% endif %}
+{% if person.links.github %} \ \ \href{ {{ person.links.github }} }{GitHub}{% endif %}
+
+\vspace{0.3cm}
+
+{\large \textbf{ {{ headline }} }}\\
+{{ summary }}
+
+\vspace{0.3cm}
+\textbf{Skills}\\
+{% for cat in skills %}
+\textbf{ {{ cat["name"] }}: } {{ ", ".join(cat["items"]) }}\\
+{% endfor %}
+
+\vspace{0.3cm}
+\textbf{Experience}
+{% for e in experience %}
+\subsection*{ {{ e.role }} \ \ \textit{ {{ e.company }} } }
+\begin{itemize}
+{% for b in e.bullets %}
+  \item {{ b.text }}
+{% endfor %}
+\end{itemize}
+{% endfor %}
+
+\vspace{0.3cm}
+\textbf{Projects}
+{% for p in projects %}
+\subsection*{ {{ p.title }} }
+\begin{itemize}
+{% for b in p.bullets %}
+  \item {{ b.text }}
+{% endfor %}
+\end{itemize}
+{% endfor %}
+
+\vspace{0.3cm}
+\textbf{Education}
+\begin{itemize}
+{% for ed in education %}
+  \item \textbf{ {{ ed.degree }} }, {{ ed.institution }}{% if ed.end %} ({{ ed.end }}){% endif %}
+{% endfor %}
+\end{itemize}
+
+\end{document}

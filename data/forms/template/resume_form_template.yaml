@@ -1,0 +1,118 @@
+resume_schema_version: 1
+_help: Fill this file as a form. Keep IDs stable once created. Dates can be ISO (YYYY-MM)
+  or raw text if unsure.
+profile:
+  person:
+    full_name: ''
+    location: ''
+    email: ''
+    phone: ''
+    links:
+      linkedin: ''
+      github: ''
+      website: ''
+  headlines:
+  - id: headline_primary
+    text: ''
+  summaries:
+  - id: summary_primary
+    text: ''
+  skills:
+    categories:
+    - name: Languages
+      items: []
+    - name: Frameworks
+      items: []
+    - name: Data/ML
+      items: []
+    - name: Cloud/DevOps
+      items: []
+    - name: Tools
+      items: []
+  interests: ''
+  certifications: []
+blocks:
+  experience:
+  - id: exp_000
+    role: ''
+    company: ''
+    location: ''
+    start: ''
+    end: ''
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: ''
+      kind: impact
+      metrics: []
+      tags:
+        skills: []
+        tools: []
+        domain: []
+    tags:
+      skills: []
+      tools: []
+      domain: []
+      seniority: []
+  projects:
+  - id: proj_000
+    title: ''
+    context: ''
+    links: []
+    start: ''
+    end: ''
+    bullets:
+    - id: b_0001
+      text: ''
+      kind: technical
+      metrics: []
+      tags:
+        skills: []
+        tools: []
+        domain: []
+    tags:
+      skills: []
+      tools: []
+      domain: []
+  education:
+  - id: edu_000
+    degree: ''
+    institution: ''
+    location: ''
+    start: ''
+    end: ''
+    grade: ''
+    modules: []
+    notes: ''
+  achievements:
+  - id: ach_000
+    title: ''
+    date: ''
+    evidence: ''
+    notes: ''
+    tags:
+      skills: []
+      tools: []
+      domain: []
+  publications:
+  - id: pub_000
+    title: ''
+    venue: ''
+    year: ''
+    authors: ''
+    links: []
+    notes: ''
+variants:
+  _help: Optional. Define role-specific versions without editing the base blocks.
+  summary_by_role:
+  - role_key: ai_engineer
+    summary_id: summary_primary
+  include_rules:
+  - role_key: ai_engineer
+    include:
+      experience: []
+      projects: []
+    exclude:
+      experience: []
+      projects: []
