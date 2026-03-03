@@ -1,56 +1,252 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage[hidelinks]{hyperref}
+{# ============================
+  DROP-IN cv.tex.j2 REPLACEMENT (SAFE FOR TECTONIC)
+  Two-column layout with shaded right sidebar
+  Left column wide (Experience), right column narrow (Skills/Education/etc.)
+
+  Key fixes:
+  - No stray \\ in header (uses \par)
+  - \href URLs are whitespace-trimmed with {{- ... -}} to avoid spaces inside braces
+  - No tcolorbox breakable inside paracol (common failure)
+============================ #}
+
+\documentclass[10pt,a4paper]{article}
+
+% =====================
+% PACKAGES
+% =====================
+\usepackage[a4paper,margin=0.8in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{paracol}
 \usepackage{enumitem}
-\setlist[itemize]{noitemsep, topsep=0pt}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+\definecolor{headerbg}{HTML}{111827} % dark slate
+\definecolor{headerfg}{HTML}{FFFFFF}
+
+% =====================
+% STYLE
+% =====================
+\definecolor{sidebarbg}{HTML}{F4F6F8}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=*, itemsep=2pt, topsep=2pt}
+
+\titleformat{\section}{\large\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+
+\hypersetup{
+  colorlinks=true,
+  urlcolor=black
+}
+
+% Column split: wide left, narrow right
+\columnratio{0.65,0.35}
+
+% Small helper
+\newcommand{\sep}{\hspace{6pt}\textbullet\hspace{6pt}}
 
 \begin{document}
 
-{\LARGE \textbf{ {{ person.full_name }} }}\\
-{{ person.location }}\\
-\href{mailto:{{ person.email }}}{{ person.email }}{% if person.phone %} \ \ {{ person.phone }}{% endif %}\\
-{% if person.links.linkedin %}\href{ {{ person.links.linkedin }} }{LinkedIn}{% endif %}
-{% if person.links.github %} \ \ \href{ {{ person.links.github }} }{GitHub}{% endif %}
+% =====================
+% HEADER (CONTRAST BAR)
+% =====================
+\begin{tcolorbox}[
+  colback=headerbg,
+  colframe=headerbg,
+  boxrule=0pt,
+  arc=2mm,
+  left=4mm,right=4mm,top=3mm,bottom=3mm,
+  enhanced
+]
+\begin{center}
+\color{headerfg}
+{\LARGE \textbf{ {{ person.full_name | default("Your Name") }} }}\par
+\vspace{4pt}
 
-\vspace{0.3cm}
+{% set header_bits = [] %}
+{% if person.location %}{% set _ = header_bits.append(person.location | trim) %}{% endif %}
+{% if person.phone %}{% set _ = header_bits.append(person.phone | trim) %}{% endif %}
+{% if person.email %}{% set _ = header_bits.append(person.email | trim) %}{% endif %}
 
-{\large \textbf{ {{ headline }} }}\\
-{{ summary }}
+{% if header_bits | length > 0 %}
+{{ header_bits | join(" \\textbullet\\ ") }}\par
+{% endif %}
 
-\vspace{0.3cm}
-\textbf{Skills}\\
-{% for cat in skills %}
-\textbf{ {{ cat["name"] }}: } {{ ", ".join(cat["items"]) }}\\
+{% if person.links.linkedin or person.links.github %}
+\vspace{2pt}
+{% if person.links.linkedin %}\href{ {{- person.links.linkedin | trim -}} }{\color{headerfg}LinkedIn}{% endif %}
+{% if person.links.github %}{% if person.links.linkedin %} \textbullet\ {% endif %}\href{ {{- person.links.github | trim -}} }{\color{headerfg}GitHub}{% endif %}\par
+{% endif %}
+\end{center}
+\end{tcolorbox}
+
+% =====================
+% PROFILE
+% =====================
+{% if profile_text %}
+\section*{Profile}
+{% if profile_text is string %}
+{{ profile_text }}
+{% else %}
+{% for p in profile_text %}
+{{ p }}\par
 {% endfor %}
+{% endif %}
+{% endif %}
 
-\vspace{0.3cm}
-\textbf{Experience}
-{% for e in experience %}
-\subsection*{ {{ e.role }} \ \ \textit{ {{ e.company }} } }
+% =====================
+% TWO COLUMNS
+% =====================
+\begin{paracol}{2}
+
+% =====================
+% LEFT COLUMN
+% =====================
+\section*{Experience}
+{% for exp in experience | default([]) %}
+
+\textbf{ {{ exp.title }} }
+{% if exp.start or exp.end %}
+\hfill {{ exp.start | default("") }}{% if exp.start and exp.end %}--{% endif %}{{ exp.end | default("") }}
+{% endif %}\par
+
+{% set org_line = [] %}
+{% if exp.company %}{% set _ = org_line.append(exp.company | trim) %}{% endif %}
+{% if exp.location %}{% set _ = org_line.append(exp.location | trim) %}{% endif %}
+{% if org_line | length > 0 %}
+{{ org_line | join(", ") }}\par
+{% endif %}
+
+{% if exp.bullets %}
 \begin{itemize}
-{% for b in e.bullets %}
-  \item {{ b.text }}
+{% for b in exp.bullets %}
+  \item {% if b is string %}{{ b }}{% elif b is mapping %}{{ b.text | default(b["text"]) }}{% else %}{{ b.text }}{% endif %}
 {% endfor %}
 \end{itemize}
+{% endif %}
+
 {% endfor %}
 
-\vspace{0.3cm}
-\textbf{Projects}
-{% for p in projects %}
-\subsection*{ {{ p.title }} }
-\begin{itemize}
-{% for b in p.bullets %}
-  \item {{ b.text }}
-{% endfor %}
-\end{itemize}
-{% endfor %}
+{% if projects and (projects | length) > 0 %}
+\section*{Projects}
+{% for prj in projects %}
 
-\vspace{0.3cm}
-\textbf{Education}
+\textbf{ {{ prj.title }} }
+{% if prj.start or prj.end %}
+\hfill {{ prj.start | default("") }}{% if prj.start and prj.end %}--{% endif %}{{ prj.end | default("") }}
+{% endif %}\par
+
+{% if prj.org %}{{ prj.org }}\par{% endif %}
+
+{% if prj.bullets %}
 \begin{itemize}
-{% for ed in education %}
-  \item \textbf{ {{ ed.degree }} }, {{ ed.institution }}{% if ed.end %} ({{ ed.end }}){% endif %}
+{% for b in prj.bullets %}
+  \item {% if b is string %}{{ b }}{% elif b is mapping %}{{ b.text | default(b["text"]) }}{% else %}{{ b.text }}{% endif %}
 {% endfor %}
 \end{itemize}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+% =====================
+% RIGHT COLUMN (SHADED)
+% =====================
+\switchcolumn
+
+\begin{tcolorbox}[
+  colback=sidebarbg,
+  colframe=sidebarbg,
+  boxrule=0pt,
+  arc=2mm,
+  left=3mm,right=3mm,top=2.5mm,bottom=2.5mm,
+  enhanced
+]
+
+% SKILLS
+{% if skills %}
+\section*{Skills}
+
+{# Case 1: skills is a dict like {"Languages": [...], "Tools": [...]} #}
+{% if skills is mapping %}
+  {% for k, v in skills.items() %}
+  \textbf{ {{ k }} }\par
+  {% if v is string %}
+    {{ v }}\par\vspace{3pt}
+  {% else %}
+    {{ v | join(", ") }}\par\vspace{3pt}
+  {% endif %}
+  {% endfor %}
+
+{# Case 2: skills is a list of objects/dicts like [{"name":..., "items":[...]}] #}
+{% else %}
+  {% for s in skills %}
+    {% if s is mapping %}
+      \textbf{ {{ s.get("name","") }} }\par
+      {{ (s.get("items", [])) | join(", ") }}\par\vspace{3pt}
+    {% else %}
+      \textbf{ {{ s.name }} }\par
+      {{ s.items | join(", ") }}\par\vspace{3pt}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% endif %}
+
+% EDUCATION
+{% if education %}
+\section*{Education}
+{% for edu in education %}
+
+\textbf{ {{ edu.degree | default(edu.title | default("Degree")) }} }\par
+{% set edu_line = [] %}
+{% if edu.institution %}{% set _ = edu_line.append(edu.institution | trim) %}{% endif %}
+{% if edu.location %}{% set _ = edu_line.append(edu.location | trim) %}{% endif %}
+{% if edu_line | length > 0 %}
+{{ edu_line | join(", ") }}\par
+{% endif %}
+{% if edu.start or edu.end %}
+{{ edu.start | default("") }}{% if edu.start and edu.end %}--{% endif %}{{ edu.end | default("") }}\par
+{% endif %}
+{% if edu.notes %}{{ edu.notes }}\par{% endif %}
+\vspace{4pt}
+
+{% endfor %}
+{% endif %}
+
+% CERTIFICATIONS
+{% if certifications %}
+\section*{Certifications}
+\begin{itemize}
+{% for c in certifications %}
+  {% if c is string %}
+    \item {{ c }}
+  {% else %}
+    \item {{ c.name }}{% if c.issuer %} ({{ c.issuer }}){% endif %}{% if c.year %}, {{ c.year }}{% endif %}
+  {% endif %}
+{% endfor %}
+\end{itemize}
+{% endif %}
+
+% ADDITIONAL
+{% if additional %}
+\section*{Additional}
+{% if additional is string %}
+{{ additional }}
+{% else %}
+\begin{itemize}
+{% for a in additional %}
+  \item {{ a }}
+{% endfor %}
+\end{itemize}
+{% endif %}
+{% endif %}
+
+\end{tcolorbox}
+
+\end{paracol}
 
 \end{document}

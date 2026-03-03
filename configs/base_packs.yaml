@@ -1,0 +1,54 @@
+# Base packs define deterministic "always include" blocks for a target role.
+# These act as a strong baseline even when JD matching is weak.
+
+default:
+  required_experience_ids: []
+  required_project_ids: []
+  min_experience_blocks: 2
+  min_project_blocks: 1
+
+ai_engineer:
+  # Core narrative: applied AI + KG/RAG + production backend maturity
+  required_experience_ids:
+    - exp_002  # UoL AI & Knowledge Graphs
+    - exp_004  # Team lead / reliability / ops
+    - exp_003  # Distributed systems / APIs
+  # Dynamic anchors (used for ordering + score boost). These do not remove blocks,
+  # they only change emphasis based on JD type.
+  anchor_sets:
+    ai_first:
+      - exp_002
+      - exp_003
+    eng_first:
+      - exp_004
+      - exp_003
+  required_project_ids:
+    - proj_001  # KG-RAG dissertation
+    - proj_003  # TailorRAG
+  min_experience_blocks: 3
+  min_project_blocks: 2
+
+backend_engineer:
+  required_experience_ids:
+    - exp_004
+    - exp_003
+  required_project_ids:
+    - proj_003
+  min_experience_blocks: 2
+  min_project_blocks: 1
+
+data_scientist:
+  required_experience_ids:
+    - exp_002
+  required_project_ids:
+    - proj_002
+  min_experience_blocks: 2
+  min_project_blocks: 1
+
+research_engineer:
+  required_experience_ids:
+    - exp_002
+  required_project_ids:
+    - proj_001
+  min_experience_blocks: 2
+  min_project_blocks: 1

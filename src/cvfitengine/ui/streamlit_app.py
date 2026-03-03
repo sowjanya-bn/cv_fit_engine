@@ -8,10 +8,13 @@ import streamlit as st
 
 from cvfitengine.core.load import load_resume_form
 from cvfitengine.parsing.jd_parser import parse_job
+from cvfitengine.parsing.jd_classifier import classify_jd
 from cvfitengine.selection.select import rank_blocks
 from cvfitengine.rendering.latex import render_latex
 from cvfitengine.parsing.tag_extractor import load_tag_vocab, extract_job_tags, collect_resume_tags
 from cvfitengine.core.role_profiles import load_role_profiles
+from cvfitengine.core.base_packs import load_base_packs
+from cvfitengine.scoring.score import load_scoring_config
 
 
 def now_stamp() -> str:
@@ -64,9 +67,30 @@ with st.sidebar:
     st.header("Export")
     min_score = st.slider("Min score threshold", 0.0, 1.0, 0.10, 0.01)
 
+    st.divider()
+    st.header("Baseline fill")
+    # These are fallbacks. Role base packs can override them.
+    min_exp_default = st.slider("Minimum experience blocks", 1, 8, 3)
+    min_proj_default = st.slider("Minimum project blocks", 0, 8, 2)
+
     profiles = load_role_profiles("configs/role_profiles.yaml")
     profile_keys = sorted([k for k in profiles.keys() if k != "default"])
     role_key = st.selectbox("Role profile", ["default"] + profile_keys, index=0)
+
+    base_packs = load_base_packs("configs/base_packs.yaml")
+    pack = base_packs.get(role_key, base_packs.get("default", {}))
+    pack_min_exp = int(pack.get("min_experience_blocks", min_exp_default))
+    pack_min_proj = int(pack.get("min_project_blocks", min_proj_default))
+    required_exp_ids = list(pack.get("required_experience_ids", []))
+    required_proj_ids = list(pack.get("required_project_ids", []))
+
+    st.caption("Role base pack")
+    st.write({
+        "required_experience_ids": required_exp_ids,
+        "required_project_ids": required_proj_ids,
+        "min_experience_blocks": pack_min_exp,
+        "min_project_blocks": pack_min_proj,
+    })
 
     weights = profiles.get(role_key, profiles.get("default", {}))
     exp_w = float(weights.get("experience", 1.0))
@@ -102,24 +126,60 @@ if parse_clicked:
         st.stop()
 
     job = parse_job(jd_text)
+    jd_profile = classify_jd(jd_text)
     vocab = load_tag_vocab("configs/tag_vocab.yaml")
     job_tags = extract_job_tags(jd_text, vocab)
     resume_tags = collect_resume_tags(resume)
+    scoring_cfg = load_scoring_config("configs/scoring.yaml")
 
     missing_tags = {
         k: sorted(list(set(job_tags[k]) - set(resume_tags[k])))
         for k in job_tags.keys()
     }
     st.session_state["job"] = job.model_dump()
-    st.session_state["ranked_exp"] = [
-        {k: v for k, v in r.items() if k != "block"} | {"block": r["block"]}
-        for r in rank_blocks(job.keywords, resume.blocks.experience, job_tags=job_tags, section_weight=exp_w)
-    ]
+    st.session_state["jd_profile"] = {
+        "category": jd_profile.category,
+        "seniority_level": jd_profile.seniority_level,
+        "scores": jd_profile.scores,
+    }
+
+    # Determine anchor emphasis for this role based on JD type.
+    anchor_ids: list[str] = []
+    anchor_sets = (pack.get("anchor_sets") or {})
+    if isinstance(anchor_sets, dict) and anchor_sets:
+        if jd_profile.category == "backend_systems":
+            anchor_ids = list(anchor_sets.get("eng_first", []))
+        else:
+            # applied_ai_systems / ml_heavy / mixed -> default to AI-first emphasis
+            anchor_ids = list(anchor_sets.get("ai_first", []))
+    else:
+        # Fallback: treat required blocks as anchors.
+        anchor_ids = required_exp_ids
+
+    st.session_state["anchor_ids"] = anchor_ids
 
     st.session_state["ranked_proj"] = [
         {k: v for k, v in r.items() if k != "block"} | {"block": r["block"]}
-        for r in rank_blocks(job.keywords, resume.blocks.projects, job_tags=job_tags, section_weight=proj_w)
+        for r in rank_blocks(job.keywords, resume.blocks.projects, job_tags=job_tags, section_weight=proj_w, scoring_cfg=scoring_cfg)
     ]
+
+    # Re-rank experience using anchors + seniority bias.
+    st.session_state["ranked_exp"] = [
+        {k: v for k, v in r.items() if k != "block"} | {"block": r["block"]}
+        for r in rank_blocks(
+            job.keywords,
+            resume.blocks.experience,
+            job_tags=job_tags,
+            section_weight=exp_w,
+            scoring_cfg=scoring_cfg,
+            anchor_ids=anchor_ids,
+            anchor_multiplier=float(pack.get("anchor_multiplier", 1.18)),
+            seniority_level=jd_profile.seniority_level,
+        )
+    ]
+
+    st.subheader("JD classification")
+    st.json(st.session_state["jd_profile"])
     st.subheader("Extracted job tags")
     st.json(job_tags)
 
@@ -133,6 +193,7 @@ if "ranked_exp" not in st.session_state:
 job = parse_job(jd_text)
 ranked_exp = st.session_state["ranked_exp"]
 ranked_proj = st.session_state["ranked_proj"]
+jd_profile_state = st.session_state.get("jd_profile")
 
 st.divider()
 st.subheader("Ranked blocks")
@@ -140,7 +201,10 @@ st.subheader("Ranked blocks")
 tab_exp, tab_proj = st.tabs(["Experience", "Projects"])
 
 def block_label_exp(b):
-    return f"{b.id} | {b.role} @ {b.company}"
+    dates = ""
+    if (b.start or "").strip() or (b.end or "").strip():
+        dates = f" ({(b.start or '').strip()}–{(b.end or '').strip()})"
+    return f"{b.id} | {b.role} @ {b.company}{dates}"
 
 def block_label_proj(b):
     return f"{b.id} | {b.title}"
@@ -148,21 +212,55 @@ def block_label_proj(b):
 with tab_exp:
     st.caption("Select which experience blocks to include. You can edit bullets before rendering.")
 
-    exp_options = []
+    # Seed options with required blocks from the base pack.
+    exp_by_id = {b.id: b for b in resume.blocks.experience}
+
+    # Prefer a JD-aware order: anchors first (in-order), then remaining required.
+    anchor_ids_ui = st.session_state.get("anchor_ids", []) or []
+    ordered_required = []
+    for i in anchor_ids_ui:
+        if i in required_exp_ids and i not in ordered_required:
+            ordered_required.append(i)
+    for i in required_exp_ids:
+        if i not in ordered_required:
+            ordered_required.append(i)
+
+    exp_options = [exp_by_id[i] for i in ordered_required if i in exp_by_id]
+
+    # Fill remaining options using ranking.
     for r in ranked_exp[:top_exp_preview]:
-        if r["score"] < min_score:
+        if r["block"].id in {b.id for b in exp_options}:
             continue
-        exp_options.append(r["block"])
+        # Always include at least the pack minimum (or user baseline), even if scores are low.
+        if r["score"] >= min_score or len(exp_options) < max(pack_min_exp, min_exp_default):
+            exp_options.append(r["block"])
 
     selected_exp = st.multiselect(
         "Experience blocks",
         options=exp_options,
-        default=exp_options[: min(3, len(exp_options))],
+        default=exp_options[: min(max(pack_min_exp, min_exp_default), len(exp_options))],
         format_func=block_label_exp,
     )
 
+    # Chronology enforcement: warn early if dates are missing.
+    missing_dates = [b for b in selected_exp if not (b.start or "").strip() or not (b.end or "").strip()]
+    if missing_dates:
+        st.warning(
+            "Missing dates for: "
+            + ", ".join([f"{b.role} ({b.id})" for b in missing_dates])
+            + ". Add start and end dates to enable export."
+        )
+
     for b in selected_exp:
         with st.expander(f"Edit bullets: {block_label_exp(b)}", expanded=False):
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                b.start = st.text_input(f"{b.id} start", value=b.start or "", key=f"{b.id}_start")
+            with col2:
+                b.end = st.text_input(f"{b.id} end", value=b.end or "", key=f"{b.id}_end")
+            with col3:
+                b.location = st.text_input(f"{b.id} location", value=b.location or "", key=f"{b.id}_loc")
+
             for i, bullet in enumerate(b.bullets):
                 new_text = st.text_area(
                     f"{b.id} bullet {i+1}",
@@ -175,21 +273,29 @@ with tab_exp:
 with tab_proj:
     st.caption("Select which project blocks to include. You can edit bullets before rendering.")
 
-    proj_options = []
+    proj_by_id = {b.id: b for b in resume.blocks.projects}
+    proj_options = [proj_by_id[i] for i in required_proj_ids if i in proj_by_id]
+
     for r in ranked_proj[:top_proj_preview]:
-        if r["score"] < min_score:
+        if r["block"].id in {b.id for b in proj_options}:
             continue
-        proj_options.append(r["block"])
+        if r["score"] >= min_score or len(proj_options) < max(pack_min_proj, min_proj_default):
+            proj_options.append(r["block"])
 
     selected_proj = st.multiselect(
         "Project blocks",
         options=proj_options,
-        default=proj_options[: min(2, len(proj_options))],
+        default=proj_options[: min(max(pack_min_proj, min_proj_default), len(proj_options))],
         format_func=block_label_proj,
     )
 
     for b in selected_proj:
         with st.expander(f"Edit bullets: {block_label_proj(b)}", expanded=False):
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                b.start = st.text_input(f"{b.id} start", value=b.start or "", key=f"{b.id}_start")
+            with col2:
+                b.end = st.text_input(f"{b.id} end", value=b.end or "", key=f"{b.id}_end")
             for i, bullet in enumerate(b.bullets):
                 new_text = st.text_area(
                     f"{b.id} bullet {i+1}",
@@ -204,6 +310,14 @@ col_a, col_b = st.columns([1, 1])
 
 with col_a:
     if st.button("Generate run outputs", use_container_width=True):
+        # Block export if chronology is incomplete.
+        missing_dates = [b for b in selected_exp if not (b.start or "").strip() or not (b.end or "").strip()]
+        if missing_dates:
+            st.error(
+                "Cannot export: missing start/end dates for "
+                + ", ".join([f"{b.role} ({b.id})" for b in missing_dates])
+            )
+            st.stop()
         run_dir = ensure_run_dir(runs_dir)
 
         selection = {
@@ -214,12 +328,29 @@ with col_a:
         (run_dir / "selection.json").write_text(json.dumps(selection, indent=2), encoding="utf-8")
 
         fit_report = {
+            "jd_profile": jd_profile_state,
             "job_keywords": job.keywords,
             "ranked_experience": [
-                {"id": r["id"], "score": r["score"], "base_score": r["base_score"], "tag_overlap": r["tag_overlap"]} for r in ranked_exp[:20]
+                {
+                    "id": r["id"],
+                    "score": r["score"],
+                    "base_score": r["base_score"],
+                    "text_score": r.get("text_score", 0.0),
+                    "tag_score": r.get("tag_score", 0.0),
+                    "tag_overlap": r["tag_overlap"],
+                }
+                for r in ranked_exp[:20]
             ],
             "ranked_projects": [
-                {"id": r["id"], "score": r["score"], "base_score": r["base_score"], "tag_overlap": r["tag_overlap"]} for r in ranked_proj[:20]
+                {
+                    "id": r["id"],
+                    "score": r["score"],
+                    "base_score": r["base_score"],
+                    "text_score": r.get("text_score", 0.0),
+                    "tag_score": r.get("tag_score", 0.0),
+                    "tag_overlap": r["tag_overlap"],
+                }
+                for r in ranked_proj[:20]
             ],
         }
         (run_dir / "fit_report.json").write_text(json.dumps(fit_report, indent=2), encoding="utf-8")

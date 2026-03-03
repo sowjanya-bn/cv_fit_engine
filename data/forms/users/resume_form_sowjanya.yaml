@@ -69,9 +69,9 @@ blocks:
   - id: exp_001
     role: AI Consulting Micro Internship
     company: Springpod (Remote)
-    location: ''
-    start: ''
-    end: ''
+    location: UK Remote
+    start: '2025'
+    end: '2025'
     employment_type: ''
     summary: ''
     bullets:
@@ -95,10 +95,10 @@ blocks:
       seniority: [entry]
   - id: exp_002
     role: 'Summer Research Intern : AI \& Knowledge Graphs'
-    company: University of Liverpool, United Kingdom
-    location: ''
-    start: ''
-    end: ''
+    company: University of Liverpool
+    location: United Kingdom
+    start: '2025'
+    end: '2025'
     employment_type: ''
     summary: ''
     bullets:
@@ -132,10 +132,10 @@ blocks:
         seniority: [research]
   - id: exp_003
     role: Programmer
-    company: Tata Consultancy Services, United Kingdom
-    location: ''
-    start: ''
-    end: ''
+    company: Tata Consultancy Services
+    location: United Kingdom
+    start: '2022'
+    end: '2025'
     employment_type: ''
     summary: ''
     bullets:
@@ -166,10 +166,10 @@ blocks:
       seniority: [mid-level]
   - id: exp_004
     role: Development Team Lead
-    company: Tata Consultancy Services, United Kingdom
-    location: ''
-    start: ''
-    end: ''
+    company: Tata Consultancy Services
+    location: United Kingdom
+    start: '2019'
+    end: '2022'
     employment_type: ''
     summary: ''
     bullets:
@@ -202,9 +202,9 @@ blocks:
   - id: exp_005
     role: IT Analyst
     company: Tata Consultancy Services, India
-    location: ''
-    start: ''
-    end: ''
+    location: Hyderabad
+    start: '2015'
+    end: '2019'
     employment_type: ''
     summary: ''
     bullets:
@@ -228,9 +228,9 @@ blocks:
   - id: exp_006
     role: Assistant System Engineer → System Engineer
     company: Tata Consultancy Services, India
-    location: ''
-    start: ''
-    end: ''
+    location: Hyderabad
+    start: '2011'
+    end: '2015'
     employment_type: ''
     summary: ''
     bullets:

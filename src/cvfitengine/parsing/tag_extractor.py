@@ -119,9 +119,12 @@ def extract_job_tags(
 
     # Heuristic seniority signals
     seniority_hints = {
-        "lead": ["lead", "leading", "team lead", "tech lead", "manager"],
+        "lead": ["lead", "leading", "team lead", "tech lead", "manager", "management", "ownership"],
         "mid-level": ["mid", "mid-level", "intermediate"],
-        "entry": ["entry", "graduate", "junior"],
+        "entry": ["entry", "graduate", "junior", "intern"],
+        # If present in vocab, map common senior terms.
+        "senior": ["senior", "sr."],
+        "principal": ["principal", "staff", "architect"],
     }
     for canon, hints in seniority_hints.items():
         if canon in valid["seniority"]:
