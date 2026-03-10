@@ -1,0 +1,25 @@
+job_id: sample-role-001
+target_region: uk
+target_role_family: ai_engineer
+
+selected_summary: summary_ai
+selected_headline: headline_ai
+
+selected_projects:
+  - project_liveaid_rag
+  - project_metadata_enrichment
+
+selected_experience:
+  - exp_tcs_backend
+  - exp_bme_internship
+
+skills_order:
+  - ai_ml
+  - knowledge_graphs
+  - backend
+  - tools
+
+custom_edits:
+  summary_override: null
+  headline_override: null
+  bullet_overrides: {}

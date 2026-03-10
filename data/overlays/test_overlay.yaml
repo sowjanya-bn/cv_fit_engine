@@ -1,0 +1,16 @@
+job_id: test-role
+target_region: uk
+target_role_family: ai_engineer
+
+selected_summary: null
+selected_headline: null
+
+selected_projects: []
+selected_experience: []
+
+skills_order: []
+
+custom_edits:
+  summary_override: null
+  headline_override: null
+  bullet_overrides: {}
