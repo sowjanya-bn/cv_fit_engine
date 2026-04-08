@@ -8,10 +8,15 @@ src/cvfitengine.egg-info/requires.txt
 src/cvfitengine.egg-info/top_level.txt
 src/cvfitengine/cli/main.py
 src/cvfitengine/core/__init__.py
+src/cvfitengine/core/base_packs.py
 src/cvfitengine/core/load.py
+src/cvfitengine/core/overlay_io.py
+src/cvfitengine/core/overlay_types.py
+src/cvfitengine/core/render_context.py
 src/cvfitengine/core/role_profiles.py
 src/cvfitengine/core/types.py
 src/cvfitengine/parsing/__init__.py
+src/cvfitengine/parsing/jd_classifier.py
 src/cvfitengine/parsing/jd_parser.py
 src/cvfitengine/parsing/tag_extractor.py
 src/cvfitengine/rendering/__init__.py

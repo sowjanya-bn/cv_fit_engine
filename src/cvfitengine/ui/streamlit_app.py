@@ -7,6 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from cvfitengine.core.load import load_resume_form
+from cvfitengine.core.overlay_io import load_overlay
 from cvfitengine.parsing.jd_parser import parse_job
 from cvfitengine.parsing.jd_classifier import classify_jd
 from cvfitengine.selection.select import rank_blocks
@@ -27,9 +28,31 @@ def ensure_run_dir(base: str | Path) -> Path:
     return run_dir
 
 
-def build_context(resume_form, job, selected_exp, selected_proj):
-    headline = resume_form.profile.headlines[0].text if resume_form.profile.headlines else ""
-    summary = resume_form.profile.summaries[0].text if resume_form.profile.summaries else ""
+def build_context(resume_form, job, selected_exp, selected_proj, overlay=None):
+    headline = ""
+    summary = ""
+
+    if overlay and overlay.selected_headline:
+        for h in resume_form.profile.headlines:
+            if h.id == overlay.selected_headline:
+                headline = h.text
+                break
+    elif resume_form.profile.headlines:
+        headline = resume_form.profile.headlines[0].text
+
+    if overlay and overlay.selected_summary:
+        for s in resume_form.profile.summaries:
+            if s.id == overlay.selected_summary:
+                summary = s.text
+                break
+    elif resume_form.profile.summaries:
+        summary = resume_form.profile.summaries[0].text
+
+    if overlay and overlay.custom_edits.headline_override:
+        headline = overlay.custom_edits.headline_override
+
+    if overlay and overlay.custom_edits.summary_override:
+        summary = overlay.custom_edits.summary_override
 
     skills = [{"name": c.name, "items": c.items} for c in resume_form.profile.skills.categories]
 
@@ -45,6 +68,9 @@ def build_context(resume_form, job, selected_exp, selected_proj):
         "projects": selected_proj,
         "job_title": job.title,
         "job_keywords": job.keywords,
+        "target_region": overlay.target_region if overlay else "uk",
+        "target_role_family": overlay.target_role_family if overlay else None,
+        "job_id": overlay.job_id if overlay else None,
     }
 
 
@@ -57,6 +83,7 @@ with st.sidebar:
     user_yaml_path = st.text_input("User form YAML path", value="data/forms/users/resume_form_sowjanya.yaml")
     template_path = st.text_input("LaTeX template path", value="templates/latex/cv.tex.j2")
     runs_dir = st.text_input("Runs output dir", value="data/runs")
+    overlay_path = st.text_input("Overlay YAML path (optional)", value="data/overlays/test_overlay.yaml")
 
     st.divider()
     st.header("Selection settings")
@@ -69,7 +96,6 @@ with st.sidebar:
 
     st.divider()
     st.header("Baseline fill")
-    # These are fallbacks. Role base packs can override them.
     min_exp_default = st.slider("Minimum experience blocks", 1, 8, 3)
     min_proj_default = st.slider("Minimum project blocks", 0, 8, 2)
 
@@ -110,13 +136,26 @@ with col_left:
 with col_right:
     st.subheader("Loaded resume form")
     resume = None
+    overlay = None
     load_error = None
+
     try:
         resume = load_resume_form(user_yaml_path)
         st.success(f"Loaded: {resume.profile.person.full_name}")
     except Exception as e:
         load_error = str(e)
         st.error(f"Could not load YAML form: {load_error}")
+
+    if overlay_path.strip():
+        try:
+            overlay_file = Path(overlay_path)
+            if overlay_file.exists():
+                overlay = load_overlay(overlay_file)
+                st.info(f"Overlay loaded: {overlay.job_id}")
+            else:
+                st.caption("Overlay path does not exist. Continuing without overlay.")
+        except Exception as e:
+            st.warning(f"Could not load overlay: {e}")
 
 if parse_clicked:
     if not resume:
@@ -143,17 +182,14 @@ if parse_clicked:
         "scores": jd_profile.scores,
     }
 
-    # Determine anchor emphasis for this role based on JD type.
     anchor_ids: list[str] = []
     anchor_sets = (pack.get("anchor_sets") or {})
     if isinstance(anchor_sets, dict) and anchor_sets:
         if jd_profile.category == "backend_systems":
             anchor_ids = list(anchor_sets.get("eng_first", []))
         else:
-            # applied_ai_systems / ml_heavy / mixed -> default to AI-first emphasis
             anchor_ids = list(anchor_sets.get("ai_first", []))
     else:
-        # Fallback: treat required blocks as anchors.
         anchor_ids = required_exp_ids
 
     st.session_state["anchor_ids"] = anchor_ids
@@ -163,7 +199,6 @@ if parse_clicked:
         for r in rank_blocks(job.keywords, resume.blocks.projects, job_tags=job_tags, section_weight=proj_w, scoring_cfg=scoring_cfg)
     ]
 
-    # Re-rank experience using anchors + seniority bias.
     st.session_state["ranked_exp"] = [
         {k: v for k, v in r.items() if k != "block"} | {"block": r["block"]}
         for r in rank_blocks(
@@ -212,10 +247,8 @@ def block_label_proj(b):
 with tab_exp:
     st.caption("Select which experience blocks to include. You can edit bullets before rendering.")
 
-    # Seed options with required blocks from the base pack.
     exp_by_id = {b.id: b for b in resume.blocks.experience}
 
-    # Prefer a JD-aware order: anchors first (in-order), then remaining required.
     anchor_ids_ui = st.session_state.get("anchor_ids", []) or []
     ordered_required = []
     for i in anchor_ids_ui:
@@ -227,11 +260,9 @@ with tab_exp:
 
     exp_options = [exp_by_id[i] for i in ordered_required if i in exp_by_id]
 
-    # Fill remaining options using ranking.
     for r in ranked_exp[:top_exp_preview]:
         if r["block"].id in {b.id for b in exp_options}:
             continue
-        # Always include at least the pack minimum (or user baseline), even if scores are low.
         if r["score"] >= min_score or len(exp_options) < max(pack_min_exp, min_exp_default):
             exp_options.append(r["block"])
 
@@ -242,7 +273,6 @@ with tab_exp:
         format_func=block_label_exp,
     )
 
-    # Chronology enforcement: warn early if dates are missing.
     missing_dates = [b for b in selected_exp if not (b.start or "").strip() or not (b.end or "").strip()]
     if missing_dates:
         st.warning(
@@ -310,7 +340,6 @@ col_a, col_b = st.columns([1, 1])
 
 with col_a:
     if st.button("Generate run outputs", use_container_width=True):
-        # Block export if chronology is incomplete.
         missing_dates = [b for b in selected_exp if not (b.start or "").strip() or not (b.end or "").strip()]
         if missing_dates:
             st.error(
@@ -318,6 +347,7 @@ with col_a:
                 + ", ".join([f"{b.role} ({b.id})" for b in missing_dates])
             )
             st.stop()
+
         run_dir = ensure_run_dir(runs_dir)
 
         selection = {
@@ -355,7 +385,8 @@ with col_a:
         }
         (run_dir / "fit_report.json").write_text(json.dumps(fit_report, indent=2), encoding="utf-8")
 
-        ctx = build_context(resume, job, selected_exp, selected_proj)
+        ctx = build_context(resume, job, selected_exp, selected_proj, overlay)
+
         tex = render_latex(template_path, ctx)
         (run_dir / "cv.tex").write_text(tex, encoding="utf-8")
 
@@ -383,9 +414,6 @@ with col_b:
 st.divider()
 st.subheader("Preview LaTeX")
 
-ctx_preview = build_context(resume, job, selected_exp, selected_proj)
+ctx_preview = build_context(resume, job, selected_exp, selected_proj, overlay)
 tex_preview = render_latex(template_path, ctx_preview)
 st.code(tex_preview, language="tex")
-
-
-

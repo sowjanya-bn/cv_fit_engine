@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from core.overlay_types import TailoredOverlay
+from overlay_types import TailoredOverlay
 
 
 def load_overlay(path: str | Path) -> TailoredOverlay:
