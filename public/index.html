@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CV Fit Studio — Naga Sowjanya Barla</title>
+<style>
+  :root {
+    --navy: #1A3C5E;
+    --navy-light: #e8f0f8;
+    --navy-mid: #b5cfe4;
+    --teal: #0f6e56;
+    --teal-light: #e1f5ee;
+    --amber: #854f0b;
+    --amber-light: #faeeda;
+    --red: #a32d2d;
+    --red-light: #fcebeb;
+    --bg: #f8f9fb;
+    --surface: #ffffff;
+    --border: rgba(26,60,94,0.12);
+    --border-strong: rgba(26,60,94,0.25);
+    --text: #1a1a1a;
+    --muted: #555;
+    --hint: #888;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+  /* Layout */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; flex-shrink: 0; background: var(--navy); color: #fff; display: flex; flex-direction: column; padding: 1.5rem 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .main { flex: 1; overflow-y: auto; padding: 2rem 2.5rem; max-width: 900px; }
+  @media (max-width: 700px) { .shell { flex-direction: column; } .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: .75rem; gap: 4px; } .main { padding: 1rem; } }
+
+  /* Sidebar */
+  .sidebar-logo { padding: 0 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 1rem; }
+  .sidebar-logo h1 { font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+  .sidebar-logo p { font-size: 11px; opacity: .6; margin-top: 3px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 1.25rem; font-size: 13px; cursor: pointer; opacity: .65; transition: all .15s; border-left: 3px solid transparent; }
+  .nav-item:hover { opacity: .9; background: rgba(255,255,255,.06); }
+  .nav-item.active { opacity: 1; background: rgba(255,255,255,.1); border-left-color: #fff; font-weight: 500; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; background: rgba(255,255,255,.2); border-radius: 99px; font-size: 10px; padding: 1px 6px; }
+  .sidebar-footer { margin-top: auto; padding: 1rem 1.25rem 0; border-top: 1px solid rgba(255,255,255,.1); }
+  .sidebar-footer p { font-size: 11px; opacity: .5; line-height: 1.6; }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .panel-title { font-size: 20px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .panel-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+
+  /* Form elements */
+  label.lbl { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 5px; }
+  input[type=text], select, textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 13px; font-family: inherit; transition: border .15s; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(26,60,94,.08); }
+  textarea { resize: vertical; line-height: 1.6; }
+
+  /* Buttons */
+  .btn { padding: 9px 18px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 13px; font-family: inherit; cursor: pointer; transition: all .15s; }
+  .btn:hover { background: var(--bg); }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .btn-primary:hover { background: #143056; }
+  .btn-sm { padding: 6px 13px; font-size: 12px; }
+  .btn-danger { border-color: #fca5a5; color: var(--red); }
+  .btn-danger:hover { background: var(--red-light); }
+  .btn-ghost { border-color: transparent; }
+  .btn-ghost:hover { border-color: var(--border); background: var(--bg); }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.1rem 1.25rem; margin-bottom: .75rem; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 500; }
+  .badge-green { background: var(--teal-light); color: var(--teal); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); }
+  .badge-navy { background: var(--navy-light); color: var(--navy); }
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-muted { background: #f1f1f1; color: var(--hint); }
+
+  /* Score bar */
+  .score-bar { height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 7px; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .fill-hi { background: var(--teal); }
+  .fill-mid { background: #d97706; }
+  .fill-lo { background: var(--red); }
+
+  /* Tags */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tag { font-size: 11px; padding: 2px 7px; border-radius: 99px; background: #f3f4f6; border: 1px solid #e5e7eb; color: var(--muted); }
+  .tag.match { background: var(--teal-light); color: var(--teal); border-color: var(--teal-light); }
+  .tag.gap { background: var(--amber-light); color: var(--amber); border-color: var(--amber-light); }
+
+  /* Grid helpers */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+  @media (max-width: 600px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .mb1 { margin-bottom: 1rem; }
+  .mb15 { margin-bottom: 1.5rem; }
+  .row-end { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1rem; }
+  .row-between { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 1rem; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+  .field { margin-bottom: 1rem; }
+
+  /* Loading spinner */
+  .spinner { width: 22px; height: 22px; border: 2px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-row { display: flex; align-items: center; gap: 10px; padding: 1.5rem; color: var(--muted); font-size: 13px; }
+
+  /* Alerts */
+  .alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 1rem; }
+  .alert-err { background: var(--red-light); color: var(--red); border: 1px solid #fca5a5; }
+  .alert-ok { background: var(--teal-light); color: var(--teal); border: 1px solid #6ee7b7; }
+  .alert-info { background: var(--navy-light); color: var(--navy); border: 1px solid var(--navy-mid); }
+
+  /* Insight box */
+  .insight { border-left: 3px solid var(--navy); padding: 9px 13px; background: var(--navy-light); border-radius: 0 var(--radius) var(--radius) 0; font-size: 13px; line-height: 1.6; margin-bottom: .75rem; }
+  .insight.ok { border-left-color: var(--teal); background: var(--teal-light); }
+  .insight.warn { border-left-color: #d97706; background: var(--amber-light); }
+
+  /* Profile banner */
+  .profile-banner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: flex-start; gap: 14px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--navy-light); color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; flex-shrink: 0; }
+
+  /* Role cards */
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-bottom: 1.25rem; }
+  @media (max-width: 600px) { .role-grid { grid-template-columns: 1fr; } }
+  .role-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; cursor: pointer; transition: all .15s; }
+  .role-card:hover { border-color: var(--navy-mid); background: var(--navy-light); }
+  .role-card.selected { border: 2px solid var(--navy); background: var(--navy-light); }
+  .role-card .rc-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+  /* Job cards */
+  .job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+  .job-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; cursor: pointer; transition: all .15s; position: relative; }
+  .job-card:hover { border-color: var(--navy-mid); }
+  .job-card.selected { border: 2px solid var(--navy); }
+  .jc-check { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 11px; align-items: center; justify-content: center; display: none; }
+  .job-card.selected .jc-check { display: flex; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .metric { background: var(--bg); border-radius: var(--radius); padding: .75rem; text-align: center; border: 1px solid var(--border); }
+  .metric-val { font-size: 22px; font-weight: 700; color: var(--navy); }
+  .metric-lbl { font-size: 11px; color: var(--hint); margin-top: 3px; }
+
+  /* Output tabs */
+  .out-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; gap: 0; }
+  .out-tab { padding: 8px 15px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); transition: all .15s; }
+  .out-tab.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+  .out-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; font-size: 13px; line-height: 1.8; min-height: 320px; }
+  .out-box.mono { font-family: 'Consolas', 'Menlo', monospace; font-size: 12px; white-space: pre-wrap; }
+
+  /* Section heading in CV preview */
+  .cv-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--navy); border-bottom: 1.5px solid var(--navy-mid); padding-bottom: 3px; margin: 1.25rem 0 .6rem; }
+  .cv-role { font-size: 14px; font-weight: 600; }
+  .cv-meta { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .cv-bullets { margin-left: 1.2rem; font-size: 13px; }
+  .cv-bullets li { margin-bottom: 3px; }
+
+  /* Pill selector */
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
+  .pill { padding: 5px 13px; border-radius: 99px; font-size: 12px; cursor: pointer; border: 1px solid var(--border-strong); transition: all .15s; background: var(--surface); }
+  .pill:hover { border-color: var(--navy); }
+  .pill.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+  /* Key indicator */
+  .key-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
+  .dot.ok { background: var(--teal); }
+  .dot.err { background: var(--red); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>CV Fit Studio</h1>
+    <p>Powered by Claude</p>
+  </div>
+  <div class="nav-item active" onclick="switchTab('strategy')" id="nav-strategy">
+    <span class="nav-icon">🎯</span> Role Strategy
+  </div>
+  <div class="nav-item" onclick="switchTab('live')" id="nav-live">
+    <span class="nav-icon">🌐</span> Live Search
+  </div>
+  <div class="nav-item" onclick="switchTab('discover')" id="nav-discover">
+    <span class="nav-icon">📝</span> Manual JD
+  </div>
+  <div class="nav-item" onclick="switchTab('shortlist')" id="nav-shortlist">
+    <span class="nav-icon">📋</span> Shortlist
+    <span class="nav-badge" id="sl-badge" style="display:none">0</span>
+  </div>
+  <div class="nav-item" onclick="switchTab('tailor')" id="nav-tailor">
+    <span class="nav-icon">✏️</span> Tailor CV
+  </div>
+  <div class="nav-item" onclick="switchTab('output')" id="nav-output">
+    <span class="nav-icon">📄</span> Output
+  </div>
+  <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">
+    <span class="nav-icon">⚙️</span> Settings
+  </div>
+  <div class="sidebar-footer">
+    <p id="key-indicator">API key: checking...</p>
+  </div>
+</nav>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+  <!-- SETTINGS -->
+  <div id="panel-settings" class="panel">
+    <div class="panel-title">Settings</div>
+    <div class="panel-sub">Configure your API key and profile details.</div>
+
+    <div class="card mb1">
+      <div class="card-title">Anthropic API key</div>
+      <div class="card-sub">Set via environment variable <code>ANTHROPIC_API_KEY</code> when starting the server, or enter below to save in <code>.env</code>.</div>
+      <div class="field">
+        <label class="lbl">API key</label>
+        <input type="text" id="api-key-input" placeholder="sk-ant-..." style="font-family:monospace" />
+      </div>
+      <div id="key-status-box" class="alert alert-info" style="display:none"></div>
+      <button class="btn btn-primary btn-sm" onclick="checkHealth()">Test connection</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">About</div>
+      <div class="card-sub" style="line-height:1.7">
+        CV Fit Studio is a local web app built on FastAPI + Claude.<br>
+        Your resume data lives in <code>public/profile.js</code>.<br>
+        Outputs (plain text, LaTeX) can be copy-pasted directly.<br>
+        The LaTeX output is compatible with your existing <code>cv.tex.j2</code> template structure.
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY -->
+  <div id="panel-strategy" class="panel active">
+    <div class="panel-title">Role strategy</div>
+    <div class="panel-sub">Your 5 target tracks — ranked by genuine fit to your profile.</div>
+
+    <div class="profile-banner">
+      <div class="avatar">NS</div>
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600">Naga Sowjanya Barla</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6">
+          13 yrs exp · Liverpool, UK · MSc Data Science &amp; AI (University of Liverpool, 2026)
+        </div>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+          <span class="badge badge-green">First-author ESWC 2026</span>
+          <span class="badge badge-navy">KG-RAG Dissertation</span>
+          <span class="badge badge-muted">Java · Python · RDF/SPARQL · RAG · LLMs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="insight ok" style="margin-bottom:1.25rem">
+      Your strongest differentiator is rare: a published ESWC paper + KG-RAG dissertation + 13 years production engineering. Most AI engineers lack the research depth; most researchers lack the engineering scale. Lead with this gap in every application.
+    </div>
+
+    <div class="role-grid" id="role-cards"></div>
+
+    <div id="role-detail" style="display:none">
+      <div class="divider"></div>
+      <div id="role-detail-content"></div>
+      <div class="row-end">
+        <button class="btn btn-primary btn-sm" onclick="switchTab('discover')">Find jobs for this track →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE SEARCH -->
+  <div id="panel-live" class="panel">
+    <div class="panel-title">Live job search</div>
+    <div class="panel-sub">Real postings from Reed and Adzuna — click any role to apply, or shortlist it to tailor your CV.</div>
+
+    <div class="field">
+      <label class="lbl">Role track</label>
+      <div class="pill-row" id="live-track-pills"></div>
+    </div>
+
+    <div class="grid2 mb1">
+      <div class="field">
+        <label class="lbl">Keywords</label>
+        <input type="text" id="live-keywords" placeholder="e.g. knowledge graph engineer" />
+      </div>
+      <div class="field">
+        <label class="lbl">Location</label>
+        <input type="text" id="live-location" value="UK" placeholder="e.g. London, Manchester, UK" />
+      </div>
+    </div>
+    <div class="grid2 mb1">
+      <div class="field">
+        <label class="lbl">Posted within</label>
+        <select id="live-recency">
+          <option value="3">Last 3 days</option>
+          <option value="7" selected>Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="0">Any time</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Results per source</label>
+        <select id="live-results-n">
+          <option value="10" selected>10 per source</option>
+          <option value="20">20 per source</option>
+          <option value="30">30 per source</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row-end mb1">
+      <button class="btn btn-sm" onclick="switchTab('discover')">+ Paste custom JD</button>
+      <button class="btn btn-primary" onclick="runLiveSearch()">Search Reed + Adzuna ↗</button>
+    </div>
+
+    <div id="live-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="live-msg">Searching Reed and Adzuna...</span></div>
+    <div id="live-error" class="alert alert-err" style="display:none"></div>
+    <div id="live-counts" class="alert alert-info" style="display:none"></div>
+
+    <div id="live-results" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <strong id="live-title">Results</strong>
+        <button class="btn btn-sm" onclick="switchTab('shortlist')">View shortlist →</button>
+      </div>
+      <div class="job-grid" id="live-job-cards"></div>
+    </div>
+  </div>
+
+  <!-- DISCOVER -->
+  <div id="panel-discover" class="panel">
+    <div class="panel-title">Manual JD</div>
+    <div class="panel-sub">Paste any job description — from a company website, email, or anywhere — to score and tailor your CV for it.</div>
+
+    <div class="field">
+      <label class="lbl">Active role track</label>
+      <div class="pill-row" id="track-pills"></div>
+    </div>
+
+    <div class="grid2 mb1">
+      <div class="field">
+        <label class="lbl">Location preference</label>
+        <select id="loc-pref">
+          <option>UK remote or hybrid</option>
+          <option>London</option>
+          <option>Liverpool or Manchester</option>
+          <option>Edinburgh or Glasgow</option>
+          <option>Anywhere UK</option>
+          <option>EU remote</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Company type</label>
+        <select id="co-type">
+          <option>Any</option>
+          <option>Startup or scale-up</option>
+          <option>Enterprise or large org</option>
+          <option>Research lab or academia</option>
+          <option>Consultancy</option>
+          <option>NHS or public sector</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl">Additional context</label>
+      <input type="text" id="extra-ctx" placeholder="e.g. ideally Python-first, open to contract, interested in cultural heritage or HealthTech" />
+    </div>
+
+    <div class="row-end mb1">
+      <button class="btn btn-primary" onclick="discoverJobs()">Score with Claude ↗</button>
+    </div>
+
+    <div id="disc-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="disc-msg">Searching...</span></div>
+    <div id="disc-error" class="alert alert-err" style="display:none"></div>
+
+    <div id="disc-results" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <strong id="disc-title">Results</strong>
+        <button class="btn btn-sm" onclick="switchTab('shortlist')">View shortlist →</button>
+      </div>
+      <div class="job-grid" id="job-cards"></div>
+    </div>
+  </div>
+
+  <!-- SHORTLIST -->
+  <div id="panel-shortlist" class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+      <div>
+        <div class="panel-title">Shortlisted roles</div>
+        <div class="panel-sub" style="margin-bottom:0">Click a role to tailor your CV for it.</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="clearShortlist()">Clear all</button>
+    </div>
+    <div id="sl-empty" style="color:var(--muted);padding:2rem 0;font-size:13px">No roles shortlisted yet. Go to Job Discovery and click cards to add them.</div>
+    <div id="sl-cards"></div>
+    <div id="sl-actions" style="display:none" class="row-end">
+      <button class="btn btn-sm" onclick="switchTab('discover')">← Add more</button>
+      <button class="btn btn-sm btn-primary" onclick="switchTab('tailor')">Tailor a role →</button>
+    </div>
+  </div>
+
+  <!-- TAILOR -->
+  <div id="panel-tailor" class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="panel-title" style="margin-bottom:0">Tailor CV</div>
+      <a id="tailor-apply-link" href="#" target="_blank" rel="noopener"
+         style="display:none;font-size:13px;font-weight:600;color:var(--navy);text-decoration:none;padding:6px 14px;border:1px solid var(--border-strong);border-radius:var(--radius);transition:background .15s"
+         onmouseover="this.style.background='var(--navy-light)'" onmouseout="this.style.background=''">
+        Apply for this role ↗
+      </a>
+    </div>
+    <div class="panel-sub" id="tailor-role-label">Generate a role-specific CV and cover letter with genuine bullet rewrites.</div>
+
+    <div class="field">
+      <label class="lbl">Select role from shortlist</label>
+      <select id="tailor-sel" onchange="onTailorSelect()">
+        <option value="">— pick from shortlist or paste a custom JD below —</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="lbl">Job description (auto-filled or paste your own)</label>
+      <textarea id="jd-ta" style="min-height:140px" placeholder="Paste a full job description here..."></textarea>
+    </div>
+
+    <div class="grid2 mb1">
+      <div class="field">
+        <label class="lbl">CV variant / role track</label>
+        <select id="cv-variant">
+          <option value="kg">Knowledge Graph / Semantic AI</option>
+          <option value="ai">AI / LLM Engineer</option>
+          <option value="ml">ML / Data Engineer</option>
+          <option value="java">Java / Backend Engineer</option>
+          <option value="research">AI Researcher</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Tailoring intensity</label>
+        <select id="tailor-intensity">
+          <option value="sharp">Sharp — rewrite bullets for max impact</option>
+          <option value="moderate">Moderate — strengthen and inject keywords</option>
+          <option value="light">Light — preserve voice, minimal changes</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid2 mb1">
+      <div class="field">
+        <label class="lbl">Cover letter</label>
+        <select id="want-cover">
+          <option value="yes">Yes — include cover letter</option>
+          <option value="no">No</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Cover letter tone</label>
+        <select id="cover-tone">
+          <option value="professional">Professional</option>
+          <option value="research-confident">Research-confident</option>
+          <option value="startup-direct">Startup-direct</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="lbl">Emphasis notes</label>
+      <input type="text" id="emph-notes" value="Emphasise ESWC 2026 paper prominently; lead with KG-RAG research; TCS shows scale but don't let it dominate; quantify wherever possible" />
+    </div>
+
+    <div id="tailor-err" class="alert alert-err" style="display:none"></div>
+
+    <div id="fit-section" style="display:none">
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Fit analysis</div>
+      <div class="metrics" id="fit-metrics"></div>
+      <div id="fit-detail"></div>
+      <div class="divider"></div>
+    </div>
+
+    <div id="tailor-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="tailor-msg">Working...</span></div>
+
+    <div class="row-between">
+      <button class="btn btn-sm" onclick="runFitAnalysis()">Analyse fit first</button>
+      <button class="btn btn-primary" onclick="generateCV()">Generate tailored CV ↗</button>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="panel-output" class="panel">
+    <div class="panel-title">Output</div>
+    <div class="panel-sub">Your tailored CV, cover letter, plain text and LaTeX — ready to use.</div>
+
+    <div id="out-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="out-msg">Generating...</span></div>
+    <div id="out-area" style="display:none">
+      <div class="metrics" id="out-metrics"></div>
+      <div class="out-tabs">
+        <div class="out-tab active" onclick="switchOut('cv')">CV preview</div>
+        <div class="out-tab" id="cover-tab-btn" onclick="switchOut('cover')">Cover letter</div>
+        <div class="out-tab" onclick="switchOut('plain')">Plain text</div>
+        <div class="out-tab" onclick="switchOut('latex')">LaTeX</div>
+      </div>
+      <div id="out-cv" class="out-box"></div>
+      <div id="out-cover" class="out-box" style="display:none"></div>
+      <div id="out-plain" class="out-box mono" style="display:none"></div>
+      <div id="out-latex" class="out-box mono" style="display:none"></div>
+      <div class="row-between" style="margin-top:1rem">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="copyText('out-plain')">Copy plain text</button>
+          <button class="btn btn-sm" onclick="copyText('out-latex')">Copy LaTeX</button>
+          <button class="btn btn-sm" onclick="downloadLatex()">Download .tex</button>
+          <button class="btn btn-sm btn-primary" onclick="downloadPDF()" id="pdf-btn">Download PDF</button>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="switchTab('tailor')">← Adjust &amp; regenerate</button>
+      </div>
+    </div>
+    <div id="out-empty" style="color:var(--muted);font-size:13px;padding:3rem 0">Nothing generated yet — go to Tailor CV and click Generate.</div>
+  </div>
+
+</main>
+</div>
+
+<script src="/static/profile.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

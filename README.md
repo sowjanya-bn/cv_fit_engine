@@ -1,134 +1,120 @@
-# CVFitEngine
+# CV Fit Studio
 
-Role-aligned CV assembly engine.
+A local web app for role-aware CV tailoring, job discovery, and cover letter generation — powered by Claude.
 
-CVFitEngine reads a structured YAML resume form and a job description, scores relevant blocks, selects the best-matching experience and projects, and renders a tailored LaTeX CV along with a fit report.
-
-The pipeline is deterministic and modular. The UI layer will be added later on top of this core engine.
+Built around Sowjanya's profile but easily adapted (edit `public/profile.js`).
 
 ---
 
-# Architecture Overview
+## Quick start
 
-The system follows a clean pipeline:
+### 1. Clone / unzip the project
 
-resume_form.yaml
-    ↓
-Load + Validate (Pydantic models)
-    ↓
-Parse Job Description (keyword extraction)
-    ↓
-Score Blocks (keyword + tag overlap)
-    ↓
-Select Top Blocks
-    ↓
-Render Template (LaTeX via Jinja2)
-    ↓
-Output: CV + Selection + Fit Report
+```bash
+cd cv-fit-studio
+```
 
-The YAML form is the canonical input.
-Future UI components will generate this YAML.
+### 2. Install dependencies
 
----
+```bash
+pip install -r requirements.txt
+```
 
-# Installation
+### 3. Set your Anthropic API key
 
-This project uses the modern Python packaging standard via `pyproject.toml`.
+**Option A — `.env` file (recommended):**
+```bash
+cp .env.example .env
+# then edit .env and paste your key
+```
 
-## 1. Create a virtual environment
+**Option B — environment variable:**
+```bash
+export ANTHROPIC_API_KEY=sk-ant-your-key-here   # Mac/Linux
+set ANTHROPIC_API_KEY=sk-ant-your-key-here       # Windows CMD
+$env:ANTHROPIC_API_KEY="sk-ant-your-key-here"    # PowerShell
+```
 
-python -m venv .venv
-source .venv/bin/activate
+### 4. Run
 
-On Windows:
+```bash
+python run.py
+```
 
-.venv\Scripts\activate
-
-## 2. Install in editable mode
-
-pip install -e .
-
-Editable mode allows you to modify the source code without reinstalling the package.
+Open **http://localhost:8000** in your browser.
 
 ---
 
-# Running the Pipeline
+## Project structure
 
-Place a job description in:
-
-data/jobs/raw/jd.txt
-
-Then run:
-
-python -m cvfitengine.cli.main \
-  --job data/jobs/raw/jd.txt \
-  --user data/forms/users/sowjanya.yaml
-
-The pipeline will create a timestamped run folder under:
-
-data/runs/<timestamp>/
-
-Containing:
-
-- cv.tex — rendered LaTeX CV
-- selection.json — selected experience and projects
-- fit_report.json — scoring diagnostics and keyword overlaps
+```
+cv-fit-studio/
+├── run.py              ← start the app
+├── requirements.txt
+├── .env.example
+├── src/
+│   └── app.py          ← FastAPI backend (proxies Claude API calls)
+└── public/
+    ├── index.html      ← single-page UI
+    ├── profile.js      ← YOUR resume data (edit this!)
+    └── app.js          ← all UI logic
+```
 
 ---
 
-# Project Structure
+## Customising for your profile
 
-cvfitengine/
-  src/                      # Core pipeline logic
-    cvfitengine/
-      cli/                  # CLI entrypoint
-      core/                 # Domain models (Pydantic)
-      parsing/              # Job description parsing
-      scoring/              # Block scoring logic
-      selection/            # Block ranking and selection
-      rendering/            # Template rendering
-      ui/                   # Future UI layer
+Edit `public/profile.js` — it's plain JavaScript with your full resume structured as:
 
-  data/
-    forms/
-      template/             # Blank YAML form
-      users/                # User-filled YAML forms (gitignored)
-    jobs/
-      raw/                  # Raw job descriptions
-      parsed/               # Structured job data (future)
-    runs/                   # Output runs (gitignored)
+- `PROFILE.experience[]` — each role with bullets and tags
+- `PROFILE.projects[]` — projects with bullets
+- `PROFILE.skills{}` — skill categories
+- `PROFILE.achievements[]` — headline achievements
+- `PROFILE.education[]` — degrees
+- `ROLES[]` — the 5 target tracks with fit scores and strategy text
 
-  templates/
-    latex/                  # LaTeX Jinja templates
-
-  configs/                  # App configuration
-
-  pyproject.toml            # Dependency and build configuration
+All other logic in `app.js` reads from `PROFILE` and `ROLES`.
 
 ---
 
-# Design Principles
+## Features
 
-- YAML-first architecture
-- Deterministic block selection
-- Stable IDs for reusable experience blocks
-- Tag-aware scoring (skills, tools, domain)
-- Clear separation between pipeline and UI
+| Tab | What it does |
+|-----|-------------|
+| **Role Strategy** | Shows 5 target tracks with honest fit scores and employer targets |
+| **Job Discovery** | Claude generates 8 realistic, scored job listings per track |
+| **Shortlist** | Save jobs you like; quick-tailor from here |
+| **Tailor CV** | Role-aware CV generation with genuine bullet rewrites + fit analysis |
+| **Output** | CV preview, cover letter, plain text (copy-paste), LaTeX download |
+| **Settings** | API key status check |
 
 ---
 
-# Roadmap
+## Why local?
 
-- Improve tag-based scoring weights
-- Add role-specific selection rules
-- Add DOCX rendering
-- Build Streamlit-based UI on top of the pipeline
+- API key stays server-side — never in the browser
+- You own your data — nothing leaves except the Claude API calls
+- Works offline for everything except generation
+- Easy to extend with your existing `cvfitengine` Python code
 
+---
 
+## Integrating with your existing cvfitengine
 
-# Pre-requisites
+The LaTeX output from the Output tab is structurally compatible with your existing `cv.tex.j2` template. You can:
 
-brew install tectonic
+1. Download the `.tex` file from the Output tab
+2. Drop it into your `data/runs/` directory
+3. Compile with your existing `pdf.py` renderer
 
-tectonic --version
+Or import `cvfitengine` scoring directly into `src/app.py` to add tag-based re-ranking on top of the LLM output.
 
+---
+
+## Troubleshooting
+
+**"API key not set"** — check `.env` has `ANTHROPIC_API_KEY=sk-ant-...` with no quotes or spaces.
+
+**Slow generation** — normal; Claude is writing a full CV. The `max_tokens=4096` setting gives it room to produce quality output.
+
+**Port already in use** — change the port in `run.py`: `uvicorn.run(..., port=8001)`.

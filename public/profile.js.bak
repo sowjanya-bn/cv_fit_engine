@@ -1,0 +1,221 @@
+/**
+ * profile.js — Sowjanya's resume data
+ * Edit this file to update your profile without touching app logic.
+ */
+
+const PROFILE = {
+  name: "Naga Sowjanya Barla",
+  location: "Liverpool, UK",
+  email: "nagasowjanya.barla@gmail.com",
+  phone: "+44 7440 115 316",
+  linkedin: "https://www.linkedin.com/in/naga-sowjanya-barla",
+  github: "https://github.com/sowjanya-bn",
+
+  education: [
+    {
+      degree: "MSc Data Science and Artificial Intelligence",
+      inst: "University of Liverpool, UK",
+      year: "2026",
+      note: "Dissertation: RAG-based Digital Storytelling on Music Knowledge Graphs"
+    },
+    {
+      degree: "B.E. Electronics and Communication Engineering",
+      inst: "GITAM University, India",
+      year: "2011"
+    }
+  ],
+
+  achievements: [
+    {
+      title: "First-author paper accepted at ESWC 2026",
+      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference (top-tier venue), arXiv:2604.02545"
+    },
+    {
+      title: "Hackathon Winner — Reinventing the British Music Experience",
+      detail: "University of Liverpool 2025 — knowledge-graph-driven adaptive narrative engine for personalised museum experiences"
+    }
+  ],
+
+  skills: {
+    "Languages":   ["Python", "Java", "SQL"],
+    "Frameworks":  ["Spring Boot", "Spring WebFlux", "FastAPI", "Apache Camel", "MuleSoft"],
+    "AI / ML":     ["Retrieval-Augmented Generation", "LLMs", "Knowledge Graphs", "NLP",
+                    "Machine Learning", "SHAP", "XGBoost", "Prompt Engineering"],
+    "Semantic Web":["RDF", "SPARQL", "Ontology Modelling", "Schema.org", "Music Meta"],
+    "Data / Infra":["Elasticsearch", "Kafka", "MySQL", "Redis", "Docker", "AWS", "CI/CD", "Git"],
+    "Integration": ["Apigee", "API Gateways", "HAProxy", "Microservices", "Event-driven systems"]
+  },
+
+  certifications: [
+    "AI Consulting Micro Internship (Springpod)",
+    "Oracle Certified Java Programmer",
+    "Oracle Certified Java EE Web Component Developer"
+  ],
+
+  experience: [
+    {
+      id: "e1",
+      role: "AI Consulting Micro Internship",
+      co: "Springpod (Remote)",
+      dates: "2025",
+      bullets: [
+        "Analysed client-style AI briefs to frame solution approaches and feasibility assessments.",
+        "Produced consulting-grade deliverables evaluating AI use cases using structured decision frameworks.",
+        "Evaluated applied AI feasibility against cost, value, and implementation complexity criteria."
+      ],
+      tags: ["ai", "consulting", "evaluation"]
+    },
+    {
+      id: "e2",
+      role: "Summer Research Intern — AI & Knowledge Graphs",
+      co: "University of Liverpool",
+      dates: "Jun–Jul 2025",
+      bullets: [
+        "Built Python LLM pipelines for structured metadata extraction from semi-structured data sources.",
+        "Modelled and queried knowledge graphs using RDF and SPARQL for grounded, structured retrieval.",
+        "Developed evaluation frameworks to assess consistency, grounding, and reliability of AI-generated outputs.",
+        "Designed reproducible workflows comparing retrieval strategies; analysed trade-offs to optimise pipeline performance."
+      ],
+      tags: ["rag", "llm", "knowledge-graphs", "nlp", "evaluation", "python", "rdf", "sparql"]
+    },
+    {
+      id: "e3",
+      role: "Programmer",
+      co: "Tata Consultancy Services, UK",
+      dates: "Apr 2022–Feb 2025",
+      bullets: [
+        "Developed and maintained large-scale SIP-based telephony platforms serving millions of subscribers.",
+        "Designed high-performance REST APIs for telecom provisioning and network management using Spring Boot.",
+        "Engineered distributed data replication pipelines across geographically separated nodes with strong consistency guarantees.",
+        "Integrated MuleSoft and Apache Camel workflows for reliable data exchange across enterprise service boundaries.",
+        "Built secure Apigee gateway proxies exposing network capabilities to internal and external consumers.",
+        "Prototyped Python data tooling and early AI-adjacent analytics features in production environments."
+      ],
+      tags: ["java", "spring", "api", "distributed", "backend", "python", "kafka", "apigee"]
+    },
+    {
+      id: "e4",
+      role: "Development Team Lead",
+      co: "Tata Consultancy Services, UK",
+      dates: "Apr 2019–Apr 2022",
+      bullets: [
+        "Led 6-person cross-functional engineering team delivering scalable backend systems on time and within scope.",
+        "Designed Elasticsearch-based monitoring and alerting systems improving operational incident response.",
+        "Drove architectural decisions to improve system reliability, fault tolerance, and horizontal scalability.",
+        "Ensured GDPR compliance through structured data governance and retention policy implementation."
+      ],
+      tags: ["lead", "architecture", "elasticsearch", "reliability", "java", "gdpr"]
+    },
+    {
+      id: "e5",
+      role: "IT Analyst",
+      co: "Tata Consultancy Services, India / Norway",
+      dates: "Jul 2015–Mar 2019",
+      bullets: [
+        "Migrated work-order management system to structured jBPM-based workflows, improving operational efficiency.",
+        "Built POC fault-handling system enabling network engineers to isolate root causes across full network topology.",
+        "Managed GDPR data retention policy review across TCS-managed systems for a major Norwegian provider."
+      ],
+      tags: ["workflow", "compliance", "java", "jbpm"]
+    },
+    {
+      id: "e6",
+      role: "System Engineer → Assistant System Engineer",
+      co: "Tata Consultancy Services, India / UK",
+      dates: "Jul 2011–Jun 2015",
+      bullets: [
+        "Designed and built full-stack network provisioning systems for a major British telecom provider.",
+        "Integrated front-end and back-end technologies to deliver seamless OSS/BSS service activation workflows.",
+        "Conducted rigorous system testing and troubleshooting to maintain production quality standards."
+      ],
+      tags: ["java", "provisioning", "fullstack", "testing"]
+    }
+  ],
+
+  projects: [
+    {
+      id: "p1",
+      title: "MSc Dissertation: Knowledge Graph RAG System",
+      bullets: [
+        "Designed end-to-end KG-first RAG pipeline for personalised narrative generation over a Live Aid knowledge base.",
+        "Built and curated 20K+ triple RDF knowledge graph using Music Meta and Schema.org ontologies.",
+        "Implemented KG-RAG, Hybrid RAG and Graph RAG retrieval strategies with comparative evaluation.",
+        "Developed Python orchestration and evaluation pipelines assessing grounding accuracy, coverage, and coherence.",
+        "Analysed retrieval-quality vs generation-performance trade-offs to inform system design and optimisation."
+      ],
+      tags: ["rag", "kg", "llm", "python", "rdf", "sparql", "evaluation", "research"]
+    },
+    {
+      id: "p2",
+      title: "TailorRAG — Retrieval-Augmented Job Application Assistant",
+      bullets: [
+        "Designed RAG system combining structured user profiles with job-specific JD context for tailored CV generation.",
+        "Built document parsing and retrieval pipelines with prompt orchestration and controllable output generation.",
+        "Implemented evaluation logic to ensure relevance, consistency and factual grounding of generated outputs."
+      ],
+      tags: ["rag", "python", "prompt-engineering", "evaluation", "api"]
+    },
+    {
+      id: "p3",
+      title: "Stock Price ML Analysis",
+      bullets: [
+        "Engineered features from OHLCV, EPS surprises and news sentiment for pre-market price movement prediction.",
+        "Benchmarked XGBoost achieving ~80% accuracy; used SHAP to identify key predictive drivers."
+      ],
+      tags: ["ml", "xgboost", "shap", "feature-engineering", "python"]
+    }
+  ]
+};
+
+const ROLES = [
+  {
+    id: "kg",
+    label: "Knowledge Graph / Semantic AI Engineer",
+    fit: 95,
+    pitch: "Your strongest and most differentiated position. ESWC 2026 first-author paper + KG-RAG dissertation + RDF/SPARQL expertise + production engineering is exceptionally rare. Very few engineers have this combination. Low supply, rising demand.",
+    companies: "Ontotext, Stardog, Elsevier, BBC R&D, NHS Digital, Alan Turing Institute affiliates, Wolfram, Semantic Web Company, cultural heritage tech",
+    keySkills: ["RDF", "SPARQL", "Knowledge Graphs", "RAG", "Ontology", "LLMs", "Python"],
+    fitClass: "badge-green",
+    fitLabel: "Strongest fit"
+  },
+  {
+    id: "ai",
+    label: "AI / LLM Engineer",
+    fit: 85,
+    pitch: "Strong fit. Published RAG research, MSc dissertation, TailorRAG project, and TCS backend scale gives you solid credentials. Competes with many candidates but your research depth and publication give a real edge.",
+    companies: "Startups building RAG products, enterprise AI labs, Anthropic partners, NHS AI units, legal tech, financial AI",
+    keySkills: ["RAG", "LLMs", "Python", "Prompt Engineering", "Knowledge Graphs", "Evaluation", "FastAPI"],
+    fitClass: "badge-green",
+    fitLabel: "Strong fit"
+  },
+  {
+    id: "ml",
+    label: "ML / Data Engineer",
+    fit: 68,
+    pitch: "Moderate fit. XGBoost project and feature engineering experience are real, but you lack a deep MLOps or data platform background. Best for orgs that value research-aware engineers over pure ML specialists.",
+    companies: "FinTech, InsurTech, NHS data teams, analytics platforms, scale-ups with small DS teams",
+    keySkills: ["Python", "XGBoost", "SHAP", "SQL", "Elasticsearch", "Feature Engineering", "Kafka"],
+    fitClass: "badge-amber",
+    fitLabel: "Moderate fit"
+  },
+  {
+    id: "java",
+    label: "Java / Backend Engineer",
+    fit: 90,
+    pitch: "13 years of Java, Spring Boot, Kafka, distributed systems is real and deep. But this de-emphasises everything that makes you interesting right now. Pursue only if you want to stay purely backend.",
+    companies: "Banks, telecom, enterprise SaaS, large system integrators",
+    keySkills: ["Java", "Spring Boot", "Kafka", "Apigee", "MuleSoft", "REST APIs", "Microservices", "Elasticsearch"],
+    fitClass: "badge-navy",
+    fitLabel: "High competence, lower leverage"
+  },
+  {
+    id: "research",
+    label: "AI Researcher",
+    fit: 55,
+    pitch: "Stretch target. The ESWC paper is a genuine credential for industry research roles. Target BBC R&D, Alan Turing Institute, BL Labs, museum tech, enterprise AI research teams — not pure academia.",
+    companies: "BBC R&D, BL Labs, V&A Digital, Wellcome Trust, Alan Turing Institute partners, Max Planck Digital Library",
+    keySkills: ["Knowledge Graphs", "RAG", "Semantic Web", "RDF", "SPARQL", "Python", "NLP", "Evaluation"],
+    fitClass: "badge-amber",
+    fitLabel: "Stretch — industry research only"
+  }
+];
