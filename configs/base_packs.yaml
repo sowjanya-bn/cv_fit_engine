@@ -24,7 +24,6 @@ ai_engineer:
       - exp_003
   required_project_ids:
     - proj_001  # KG-RAG dissertation
-    - proj_003  # TailorRAG
   min_experience_blocks: 3
   min_project_blocks: 2
 

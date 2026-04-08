@@ -28,11 +28,7 @@ const PROFILE = {
   achievements: [
     {
       title: "First-author paper accepted at ESWC 2026",
-      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference (top-tier venue), arXiv:2604.02545"
-    },
-    {
-      title: "Hackathon Winner — Reinventing the British Music Experience",
-      detail: "University of Liverpool 2025 — knowledge-graph-driven adaptive narrative engine for personalised museum experiences"
+      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference, arXiv:2604.02545"
     }
   ],
 
@@ -53,18 +49,6 @@ const PROFILE = {
   ],
 
   experience: [
-    {
-      id: "e1",
-      role: "AI Consulting Micro Internship",
-      co: "Springpod (Remote)",
-      dates: "2025",
-      bullets: [
-        "Analysed client-style AI briefs to frame solution approaches and feasibility assessments.",
-        "Produced consulting-grade deliverables evaluating AI use cases using structured decision frameworks.",
-        "Evaluated applied AI feasibility against cost, value, and implementation complexity criteria."
-      ],
-      tags: ["ai", "consulting", "evaluation"]
-    },
     {
       id: "e2",
       role: "Summer Research Intern — AI & Knowledge Graphs",
@@ -146,16 +130,6 @@ const PROFILE = {
       tags: ["rag", "kg", "llm", "python", "rdf", "sparql", "evaluation", "research"]
     },
     {
-      id: "p2",
-      title: "TailorRAG — Retrieval-Augmented Job Application Assistant",
-      bullets: [
-        "Designed RAG system combining structured user profiles with job-specific JD context for tailored CV generation.",
-        "Built document parsing and retrieval pipelines with prompt orchestration and controllable output generation.",
-        "Implemented evaluation logic to ensure relevance, consistency and factual grounding of generated outputs."
-      ],
-      tags: ["rag", "python", "prompt-engineering", "evaluation", "api"]
-    },
-    {
       id: "p3",
       title: "Stock Price ML Analysis",
       bullets: [
@@ -182,7 +156,7 @@ const ROLES = [
     id: "ai",
     label: "AI / LLM Engineer",
     fit: 85,
-    pitch: "Strong fit. Published RAG research, MSc dissertation, TailorRAG project, and TCS backend scale gives you solid credentials. Competes with many candidates but your research depth and publication give a real edge.",
+    pitch: "Strong fit. Published RAG research, MSc dissertation and TCS backend scale gives you solid credentials. Competes with many candidates but your research depth and publication give a real edge.",
     companies: "Startups building RAG products, enterprise AI labs, Anthropic partners, NHS AI units, legal tech, financial AI",
     keySkills: ["RAG", "LLMs", "Python", "Prompt Engineering", "Knowledge Graphs", "Evaluation", "FastAPI"],
     fitClass: "badge-green",

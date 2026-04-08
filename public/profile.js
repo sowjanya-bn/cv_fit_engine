@@ -28,11 +28,7 @@ const PROFILE = {
   achievements: [
     {
       title: "First-author paper accepted at ESWC 2026",
-      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference (top-tier venue), arXiv:2604.02545"
-    },
-    {
-      title: "Hackathon Winner — Reinventing the British Music Experience",
-      detail: "University of Liverpool 2025 — knowledge-graph-driven adaptive narrative engine for personalised museum experiences"
+      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference, arXiv:2604.02545"
     }
   ],
 
@@ -53,18 +49,6 @@ const PROFILE = {
   ],
 
   experience: [
-    {
-      id: "e1",
-      role: "AI Consulting Micro Internship",
-      co: "Springpod (Remote)",
-      dates: "2025",
-      bullets: [
-        "Analysed client-style AI briefs to frame solution approaches and feasibility assessments.",
-        "Produced consulting-grade deliverables evaluating AI use cases using structured decision frameworks.",
-        "Evaluated applied AI feasibility against cost, value, and implementation complexity criteria."
-      ],
-      tags: ["ai", "consulting", "evaluation"]
-    },
     {
       id: "e2",
       role: "Summer Research Intern — AI & Knowledge Graphs",
@@ -146,16 +130,6 @@ const PROFILE = {
       tags: ["rag", "kg", "llm", "python", "rdf", "sparql", "evaluation", "research"]
     },
     {
-      id: "p2",
-      title: "TailorRAG — Retrieval-Augmented Job Application Assistant",
-      bullets: [
-        "Designed RAG system combining structured user profiles with job-specific JD context for tailored CV generation.",
-        "Built document parsing and retrieval pipelines with prompt orchestration and controllable output generation.",
-        "Implemented evaluation logic to ensure relevance, consistency and factual grounding of generated outputs."
-      ],
-      tags: ["rag", "python", "prompt-engineering", "evaluation", "api"]
-    },
-    {
       id: "p3",
       title: "Stock Price ML Analysis",
       bullets: [
@@ -203,7 +177,7 @@ const ROLES = [
     id: "ai",
     label: "AI / LLM Engineer",
     fit: 85,
-    pitch: "Strong fit. Published RAG research, MSc dissertation, TailorRAG project, and TCS backend scale gives you solid credentials. Your research depth and publication give a real edge over the many bootcamp-level candidates flooding this space.",
+    pitch: "Strong fit. Published RAG research, MSc dissertation and TCS backend scale gives you solid credentials. Your research depth and publication give a real edge over the many bootcamp-level candidates flooding this space.",
     companies: "AI-native startups (RAG products, copilots, document AI), enterprise AI teams, Anthropic partners, NHS AI units, legal tech (Luminance, Relativity), FinTech AI (Thought Machine, Monzo AI), publishing AI (Springer, Reuters)",
     keySkills: ["RAG", "LLMs", "Python", "Prompt Engineering", "Knowledge Graphs", "Evaluation Frameworks", "FastAPI", "Vector Databases"],
 
@@ -226,7 +200,7 @@ const ROLES = [
       "AI Platform Engineer",
     ],
 
-    additionalContext: `Looking for roles where RAG, LLMs, and production AI systems are the core of the work. I have a first-author publication at ESWC 2026 on controlled RAG architectures, an MSc dissertation implementing multiple RAG retrieval strategies over a knowledge graph, and a personal project (TailorRAG) building a RAG-based document system. I bring something unusual: rigorous evaluation methodology from research experience combined with 13 years of production engineering — I know how to build AI systems that are reliable, not just demos. Particularly interested in roles where grounding, factual accuracy, and evaluation matter (not just "prompt and hope"). Python-first. Open to early-stage startups or established teams building serious AI products.`,
+    additionalContext: `Looking for roles where RAG, LLMs, and production AI systems are the core of the work. I have a first-author publication at ESWC 2026 on controlled RAG architectures, an MSc dissertation implementing multiple RAG retrieval strategies over a knowledge graph. I bring something unusual: rigorous evaluation methodology from research experience combined with 13 years of production engineering — I know how to build AI systems that are reliable, not just demos. Particularly interested in roles where grounding, factual accuracy, and evaluation matter (not just "prompt and hope"). Python-first. Open to early-stage startups or established teams building serious AI products.`,
 
     fitClass: "badge-green",
     fitLabel: "Strong fit"

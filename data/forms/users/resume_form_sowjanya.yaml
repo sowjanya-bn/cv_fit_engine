@@ -66,33 +66,6 @@ profile:
   - Oracle Certified Java EE Web Component Developer
 blocks:
   experience:
-  - id: exp_001
-    role: AI Consulting Micro Internship
-    company: Springpod (Remote)
-    location: UK Remote
-    start: '2025'
-    end: '2025'
-    employment_type: ''
-    summary: ''
-    bullets:
-    - id: b_0001
-      text: Analysed client-style briefs to frame AI opportunities and solution approaches.
-      kind: impact
-      metrics: []
-    - id: b_0002
-      text: Produced consulting-style deliverables assessing feasibility, value and
-        implementation fit.
-      kind: impact
-      metrics: []
-    - id: b_0003
-      text: Evaluated applied AI use cases using structured decision criteria.
-      kind: impact
-      metrics: []
-    tags:
-      skills: [ai-strategy, solution-design, evaluation, use-case-analysis]
-      tools: []
-      domain: [consulting]
-      seniority: [entry]
   - id: exp_002
     role: 'Summer Research Intern : AI \& Knowledge Graphs'
     company: University of Liverpool
@@ -304,32 +277,6 @@ blocks:
       skills: [machine-learning, feature-engineering, model-evaluation, financial-analysis]
       tools: [python, xgboost, shap]
       domain: [finance]
-  - id: proj_003
-    title: 'TailorRAG : Retrieval-Augmented Job Application Assistant'
-    context: ''
-    links: []
-    start: ''
-    end: ''
-    bullets:
-    - id: b_0001
-      text: Designed and implemented a RAG-based system to analyse job descriptions
-        and generate tailored CV and cover letter content.
-      kind: technical
-      metrics: []
-    - id: b_0002
-      text: Built document parsing and retrieval pipelines combining structured user
-        profiles with job-specific context.
-      kind: technical
-      metrics: []
-    - id: b_0003
-      text: Implemented prompt orchestration and evaluation logic to ensure relevance,
-        consistency and controllable outputs.
-      kind: technical
-      metrics: []
-    tags:
-      skills: [rag, retrieval, prompt-engineering, document-parsing, evaluation, api-design]
-      tools: [python, docker]
-      domain: [ai-systems]
   education:
   - id: edu_001
     degree: MSc Data Science and Artificial Intelligence
@@ -362,21 +309,6 @@ blocks:
         skills: [knowledge-graphs, rag, semantic-web, research]
         tools: [rdf, sparql]
         domain: [research, semantic-web]
-
-    - id: ach_002
-      title: Hackathon Winner – Reinventing the British Music Experience
-      date: 2025
-      evidence: University of Liverpool Hackathon
-      notes: >
-        Designed a personalised museum experience concept where each visitor
-        receives a dynamically generated narrative journey tailored to their
-        profile, enabling a different cultural experience on every visit.
-        Proposed a knowledge-graph-driven storytelling engine to support
-        adaptive content sequencing.
-      tags:
-        skills: [personalisation, knowledge-graphs, narrative-generation, ai-systems]
-        tools: [python]
-        domain: [cultural-heritage, experience-design, hackathon]
 
 
 
