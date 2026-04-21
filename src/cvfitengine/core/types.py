@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
@@ -104,3 +105,39 @@ class JobSpec(BaseModel):
     raw_text: str
     keywords: List[str] = Field(default_factory=list)
     title: str = ""
+
+
+class JobListing(BaseModel):
+    id: str
+    title: str
+    company: str
+    location: str = ""
+    salary_raw: str = ""
+    employment_type: str = ""
+    description_full: str = ""
+    url: str = ""
+    apply_url: str = ""
+    source: Literal["linkedin", "indeed", "reed", "adzuna"] = "reed"
+    easy_apply: bool = False
+    posted_date: str = ""
+    scraped_at: datetime = Field(default_factory=datetime.utcnow)
+    fit_score: Optional[float] = None
+    skill_gaps: Optional[List[str]] = None
+    apply_status: Literal["none", "queued", "applied", "failed", "skipped"] = "none"
+
+    # Convenience aliases used by the frontend and existing API contract
+    @property
+    def salary(self) -> str:
+        return self.salary_raw
+
+    @property
+    def summary(self) -> str:
+        return (self.description_full or "")[:280]
+
+    @property
+    def posted(self) -> str:
+        return self.posted_date
+
+    @property
+    def type(self) -> str:
+        return self.employment_type

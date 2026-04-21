@@ -99,6 +99,129 @@ def score_block(
         "tag_overlap": tag_overlap,
     }
 
+def score_job(job, resume, scoring_cfg: dict | None = None) -> dict:
+    """Aggregate fit score for a full job against a ResumeForm.
+
+    Parameters
+    ----------
+    job:         dict or JobListing-like with description_full field
+    resume:      ResumeForm instance
+    scoring_cfg: optional override; loads configs/scoring.yaml if None
+
+    Returns
+    -------
+    {
+        fit_score:       float 0-1,
+        matched_skills:  list[str],
+        matched_tools:   list[str],
+        top_blocks:      list[str]  (block IDs),
+        jd_category:     str,
+        seniority_level: str,
+    }
+    """
+    from pathlib import Path
+    from ..parsing.jd_parser import parse_job
+    from ..parsing.jd_classifier import classify_jd
+    from ..parsing.tag_extractor import load_tag_vocab, extract_job_tags, collect_resume_tags
+    from ..selection.select import rank_blocks
+
+    description = (
+        job.get("description_full") if isinstance(job, dict)
+        else getattr(job, "description_full", "")
+    ) or ""
+
+    if not description:
+        return {
+            "fit_score": 0.0,
+            "matched_skills": [],
+            "matched_tools": [],
+            "top_blocks": [],
+            "jd_category": "unknown",
+            "seniority_level": "unknown",
+        }
+
+    job_spec = parse_job(description)
+    jd_profile = classify_jd(description)
+
+    cfg = scoring_cfg or load_scoring_config()
+
+    # Load tag vocab for job tag extraction
+    vocab_path = Path(__file__).parent.parent.parent.parent / "configs" / "tag_vocab.yaml"
+    if not vocab_path.exists():
+        vocab_path = Path("configs/tag_vocab.yaml")
+    job_tags: dict | None = None
+    try:
+        vocab = load_tag_vocab(vocab_path)
+        job_tags = extract_job_tags(description, vocab)
+    except Exception:
+        job_tags = None
+
+    # Score experience blocks (weight 0.6)
+    exp_blocks = list(resume.blocks.experience or [])
+    exp_ranked = rank_blocks(
+        job_spec.keywords,
+        exp_blocks,
+        job_tags=job_tags,
+        section_weight=0.6,
+        scoring_cfg=cfg,
+        seniority_level=jd_profile.seniority_level,
+    ) if exp_blocks else []
+
+    # Score project blocks (weight 0.3)
+    proj_blocks = list(resume.blocks.projects or [])
+    proj_ranked = rank_blocks(
+        job_spec.keywords,
+        proj_blocks,
+        job_tags=job_tags,
+        section_weight=0.3,
+        scoring_cfg=cfg,
+    ) if proj_blocks else []
+
+    # Score education blocks (weight 0.1)
+    edu_blocks = list(resume.blocks.education or [])
+    edu_ranked = rank_blocks(
+        job_spec.keywords,
+        edu_blocks,
+        job_tags=job_tags,
+        section_weight=0.1,
+        scoring_cfg=cfg,
+    ) if edu_blocks else []
+
+    # Weighted aggregate
+    def _top_score(ranked: list[dict]) -> float:
+        return ranked[0]["score"] if ranked else 0.0
+
+    fit_score = round(
+        _top_score(exp_ranked) * 0.6
+        + _top_score(proj_ranked) * 0.3
+        + _top_score(edu_ranked) * 0.1,
+        4,
+    )
+    fit_score = min(1.0, fit_score)
+
+    # Collect matched skills / tools from tag overlaps
+    matched_skills: set[str] = set()
+    matched_tools: set[str] = set()
+    for r in (exp_ranked[:3] + proj_ranked[:3]):
+        to = r.get("tag_overlap") or {}
+        matched_skills.update(to.get("skills", []))
+        matched_tools.update(to.get("tools", []))
+
+    top_blocks = (
+        [r["id"] for r in exp_ranked[:2]]
+        + [r["id"] for r in proj_ranked[:1]]
+    )
+
+    return {
+        "fit_score": fit_score,
+        "matched_skills": sorted(matched_skills),
+        "matched_tools": sorted(matched_tools),
+        "top_blocks": top_blocks,
+        "jd_category": jd_profile.category,
+        "seniority_level": jd_profile.seniority_level,
+    }
+
+
 def block_to_text(block) -> str:
     parts = []
 

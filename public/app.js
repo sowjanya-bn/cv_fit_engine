@@ -17,17 +17,22 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTrackPills();
   renderLiveTrackPills();
   checkHealth();
+  // Pre-load resume YAML so scoring works without visiting Tailor tab
+  fetch("/api/resume-yaml").then(r => r.ok ? r.text() : null).then(t => {
+    if (t) window._resumeYamlCache = t;
+  }).catch(() => {});
 });
 
 // ── tab routing ────────────────────────────────────────────────
 function switchTab(t) {
-  const tabs = ["strategy", "live", "discover", "shortlist", "tailor", "output", "settings"];
+  const tabs = ["strategy", "live", "discover", "shortlist", "tailor", "output", "applications", "settings"];
   tabs.forEach(k => {
     document.getElementById("panel-" + k).classList.toggle("active", k === t);
     document.getElementById("nav-" + k).classList.toggle("active", k === t);
   });
   if (t === "shortlist") renderShortlist();
   if (t === "tailor") populateTailorSelect();
+  if (t === "applications") loadApplicationLog();
   if (t === "output" && !lastOutput) {
     document.getElementById("out-empty").style.display = "";
     document.getElementById("out-area").style.display = "none";
@@ -151,7 +156,7 @@ function fillAdditionalContext() {
   }
 }
 
-async function discoverJobs() {
+async function discoverJobs(mergeMode = false) {
   const loc = document.getElementById("loc-pref").value;
   const co = document.getElementById("co-type").value;
   const extra = document.getElementById("extra-ctx").value;
@@ -194,7 +199,14 @@ Make companies realistic and varied — mix startups, scale-ups, enterprises, re
       `Role track: ${activeTrack.label}\nKey skills: ${activeTrack.keySkills.join(", ")}\nLocation: ${loc}\nCompany type: ${co}\nCandidate context: ${extra}`
     );
     const data = parseJSON(raw);
-    discoveredJobs = data.jobs || [];
+    const claudeJobs = data.jobs || [];
+    if (mergeMode) {
+      // Merge: add Claude-generated jobs not already in discoveredJobs
+      const existingIds = new Set(discoveredJobs.map(j => j.id));
+      discoveredJobs = discoveredJobs.concat(claudeJobs.filter(j => !existingIds.has(j.id)));
+    } else {
+      discoveredJobs = claudeJobs;
+    }
     renderJobCards();
     document.getElementById("disc-results").style.display = "block";
     document.getElementById("disc-title").textContent = `${discoveredJobs.length} ${activeTrack.label} roles found`;
@@ -206,34 +218,131 @@ Make companies realistic and varied — mix startups, scale-ups, enterprises, re
   }
 }
 
+let jobSortMode = "score"; // 'score' | 'date' | 'salary'
+let jobRecencyFilter = "all"; // 'all' | 'week'
+
+// Parse LinkedIn relative date strings → days ago (Infinity = unknown)
+function _relativeTodays(str) {
+  if (!str) return Infinity;
+  const s = str.toLowerCase().trim();
+  if (/just now|today|hour|minute/.test(s)) return 0;
+  const days = s.match(/(\d+)\s*day/);
+  if (days) return parseInt(days[1]);
+  const weeks = s.match(/(\d+)\s*week/);
+  if (weeks) return parseInt(weeks[1]) * 7;
+  const months = s.match(/(\d+)\s*month/);
+  if (months) return parseInt(months[1]) * 30;
+  // ISO date string e.g. "2025-04-15"
+  const iso = s.match(/(\d{4}-\d{2}-\d{2})/);
+  if (iso) return Math.floor((Date.now() - new Date(iso[1])) / 86400000);
+  return Infinity;
+}
+
 function renderJobCards() {
   const c = document.getElementById("job-cards");
   c.innerHTML = "";
   const slIds = new Set(shortlist.map(j => j.id));
-  discoveredJobs.forEach(job => {
-    const s = job.fit_score || 0;
-    const bc = s >= 80 ? "badge-green" : s >= 65 ? "badge-amber" : "badge-muted";
-    const fc = s >= 80 ? "fill-hi" : s >= 65 ? "fill-mid" : "fill-lo";
+
+  let jobs = [...discoveredJobs];
+
+  // Recency filter
+  if (jobRecencyFilter === "week") {
+    jobs = jobs.filter(j => _relativeTodays(j.posted_date || j.posted) <= 7);
+  }
+
+  if (jobSortMode === "score") {
+    jobs.sort((a, b) => (b.fit_score || 0) - (a.fit_score || 0));
+  } else if (jobSortMode === "date") {
+    jobs.sort((a, b) => _relativeTodays(a.posted_date || a.posted) - _relativeTodays(b.posted_date || b.posted));
+  } else if (jobSortMode === "salary") {
+    jobs.sort((a, b) => _parseSalary(b) - _parseSalary(a));
+  }
+
+  // Controls row
+  const ctrl = document.createElement("div");
+  ctrl.style = "display:flex;gap:8px;align-items:center;margin-bottom:.75rem;flex-wrap:wrap";
+  ctrl.innerHTML = `
+    <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Sort:</span>
+    ${["score","date","salary"].map(m =>
+      `<button class="btn btn-sm${jobSortMode===m?" btn-primary":""}" onclick="setJobSort('${m}')">${m==="score"?"Fit score":m==="date"?"Newest":"Salary"}</button>`
+    ).join("")}
+    <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-left:4px">Filter:</span>
+    <button class="btn btn-sm${jobRecencyFilter==="all"?" btn-primary":""}" onclick="setJobRecency('all')">All</button>
+    <button class="btn btn-sm${jobRecencyFilter==="week"?" btn-primary":""}" onclick="setJobRecency('week')">≤ 1 week</button>
+    <span style="font-size:11px;color:var(--hint);margin-left:auto">${jobs.length} shown</span>
+  `;
+  c.appendChild(ctrl);
+
+  if (!jobs.length) {
+    const empty = document.createElement("div");
+    empty.style = "color:var(--muted);font-size:13px;padding:1.5rem 0;text-align:center";
+    empty.textContent = jobRecencyFilter === "week"
+      ? "No jobs posted within the last week. Try removing the filter."
+      : "No jobs found.";
+    c.appendChild(empty);
+    return;
+  }
+
+  jobs.forEach(job => {
+    // Normalize score — backend returns 0-1, Claude returns 0-100
+    const rawScore = job.fit_score || 0;
+    const s = rawScore <= 1 ? Math.round(rawScore * 100) : rawScore;
+    const bc = s >= 70 ? "badge-green" : s >= 50 ? "badge-amber" : "badge-muted";
+    const fc = s >= 70 ? "fill-hi" : s >= 50 ? "fill-mid" : "fill-lo";
+
+    const matchedSkills = (job.matched_skills || []).slice(0, 5);
+    const missingSkills = (job.missing_skills || []).slice(0, 3);
+    const salary = job.salary_raw || job.salary || "";
+    const postedDate = job.posted_date || job.posted || "";
+    const scoreBadge = s > 0
+      ? `<span class="badge ${bc}">${s}% fit</span>`
+      : `<span class="badge badge-muted" style="opacity:.6">unscored</span>`;
+    const dateBadge = postedDate
+      ? `<span style="font-size:11px;color:var(--hint)">📅 ${postedDate}</span>`
+      : `<span style="font-size:11px;color:var(--hint);opacity:.5">date unknown</span>`;
+
     const d = document.createElement("div");
     d.className = "job-card" + (slIds.has(job.id) ? " selected" : "");
     d.innerHTML = `
       <div class="jc-check">✓</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:2px">${job.title}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">${job.company} · ${job.location}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">${job.company} · ${job.location || ""}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-        <span class="badge ${bc}">${s}% fit</span>
-        <span class="badge badge-muted">${job.type || ""}</span>
-        ${job.salary ? `<span style="font-size:12px;color:var(--muted)">${job.salary}</span>` : ""}
+        ${scoreBadge}
+        ${dateBadge}
+        ${salary ? `<span style="font-size:12px;color:var(--teal);font-weight:500">${salary}</span>` : ""}
+        <span class="badge badge-muted">${job.type || job.employment_type || ""}</span>
       </div>
       <div class="score-bar"><div class="score-fill ${fc}" style="width:${s}%"></div></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${job.fit_reason || ""}</div>
+      ${job.fit_reason ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${job.fit_reason}</div>` : ""}
       ${job.notable ? `<div style="font-size:11px;color:var(--navy);margin-top:6px;padding:4px 8px;background:var(--navy-light);border-radius:4px">${job.notable}</div>` : ""}
       ${job.why_apply ? `<div style="font-size:11px;color:var(--teal);margin-top:4px;padding:4px 8px;background:var(--teal-light);border-radius:4px">Lead with: ${job.why_apply}</div>` : ""}
-      <div class="tag-row">${(job.tags || []).slice(0, 6).map(t => `<span class="tag">${t}</span>`).join("")}</div>
+      ${matchedSkills.length ? `<div class="tag-row">${matchedSkills.map(t=>`<span class="tag match">${t}</span>`).join("")}</div>` : ""}
+      ${missingSkills.length ? `<div class="tag-row">${missingSkills.map(t=>`<span class="tag gap">${t}</span>`).join("")}</div>` : ""}
+      ${(job.tags||[]).length ? `<div class="tag-row">${(job.tags||[]).slice(0,6).map(t=>`<span class="tag">${t}</span>`).join("")}</div>` : ""}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-sm" onclick="event.stopPropagation();openApplyPanel('${job.id}')">Apply →</button>
+      </div>
     `;
     d.onclick = () => toggleShortlist(job, d);
     c.appendChild(d);
   });
+}
+
+function setJobSort(mode) {
+  jobSortMode = mode;
+  renderJobCards();
+}
+
+function setJobRecency(filter) {
+  jobRecencyFilter = filter;
+  renderJobCards();
+}
+
+function _parseSalary(job) {
+  const s = job.salary_raw || job.salary || "";
+  const m = s.match(/[\d,]+/);
+  return m ? parseInt(m[0].replace(/,/g,"")) : 0;
 }
 
 // ── shortlist ──────────────────────────────────────────────────
@@ -378,6 +487,7 @@ async function runFitAnalysis() {
 }
 
 async function generateCV() {
+  console.log("Generating CV with current JD and settings...");
   const jd = document.getElementById("jd-ta").value.trim();
   if (!jd) { showTailorErr("Paste a job description first."); return; }
   const variant = document.getElementById("cv-variant").value;
@@ -653,7 +763,7 @@ function downloadLatex() {
   const blob = new Blob([text], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "cv_tailored.tex";
+  a.download = _autoName("cv") + ".tex";
   a.click();
 }
 
@@ -788,6 +898,629 @@ function toggleLiveShortlist(event, jobId) {
   updateSlBadge();
 }
 
+// ── Applications log — Phase 5-T3 ─────────────────────────────
+async function loadApplicationLog() {
+  const loading = document.getElementById("app-log-loading");
+  const empty = document.getElementById("app-log-empty");
+  const table = document.getElementById("app-log-table");
+  const tbody = document.getElementById("app-log-tbody");
+
+  loading.style.display = "flex";
+  empty.style.display = "none";
+  table.style.display = "none";
+
+  try {
+    const r = await fetch("/api/apply/log");
+    const d = await r.json();
+    const log = d.log || [];
+
+    if (!log.length) {
+      empty.style.display = "";
+      return;
+    }
+
+    tbody.innerHTML = "";
+    log.forEach(entry => {
+      const statusCls = entry.status === "applied" ? "badge-green"
+        : entry.status === "failed" ? "badge-red"
+        : entry.status === "awaiting_confirm" ? "badge-amber"
+        : "badge-muted";
+      const date = (entry.applied_at || entry.queued_at || "").slice(0, 10);
+      const tr = document.createElement("tr");
+      tr.style = "border-bottom:1px solid var(--border)";
+      tr.innerHTML = `
+        <td style="padding:10px">${entry.company || ""}</td>
+        <td style="padding:10px">${entry.job_title || ""}</td>
+        <td style="padding:10px;color:var(--muted)">${date}</td>
+        <td style="padding:10px;color:var(--muted)">${entry.method || ""}</td>
+        <td style="padding:10px"><span class="badge ${statusCls}">${entry.status || ""}</span></td>
+        <td style="padding:10px">
+          ${entry.cover_letter_used
+            ? `<button class="btn btn-sm btn-ghost" onclick="toggleCoverLetterRow(this)" data-cl="${encodeURIComponent(entry.cover_letter_used)}">View</button>`
+            : '<span style="color:var(--hint);font-size:12px">—</span>'}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.style.display = "";
+  } catch (e) {
+    empty.textContent = "Failed to load log: " + e.message;
+    empty.style.display = "";
+  } finally {
+    loading.style.display = "none";
+  }
+}
+
+function toggleCoverLetterRow(btn) {
+  const cl = decodeURIComponent(btn.dataset.cl || "");
+  const tr = btn.closest("tr");
+  let next = tr.nextElementSibling;
+  if (next && next.dataset.clRow) {
+    next.remove();
+    btn.textContent = "View";
+    return;
+  }
+  const row = document.createElement("tr");
+  row.dataset.clRow = "1";
+  row.innerHTML = `<td colspan="6" style="padding:10px 14px;background:var(--bg)">
+    <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto">${cl}</div>
+  </td>`;
+  tr.after(row);
+  btn.textContent = "Hide";
+}
+
+// ── Apply panel — Phase 5-T2 ───────────────────────────────────
+let applyPanelJobId = null;
+let _applyCVLatex = "";
+
+function openApplyPanel(jobId) {
+  const job = discoveredJobs.find(j => j.id === jobId) || { id: jobId, title: "", company: "" };
+  applyPanelJobId = jobId;
+
+  document.getElementById("apply-panel-title").textContent = `Apply — ${job.title}`;
+  document.getElementById("apply-panel-meta").innerHTML = `
+    <div style="font-size:14px;font-weight:600">${job.title}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">${job.company} · ${job.location || ""}</div>
+    ${job.url ? `<a href="${job.url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--teal)">View posting ↗</a>` : ""}
+  `;
+
+  // Reset panel state
+  document.getElementById("apply-cover-text").value = "";
+  document.getElementById("apply-tailor-loading").style.display = "";
+  document.getElementById("apply-tailor-summary").style.display = "none";
+  document.getElementById("apply-tailor-body").style.display = "none";
+  document.getElementById("apply-progress").style.display = "none";
+  document.getElementById("apply-screenshot-area").style.display = "none";
+  document.getElementById("apply-result").style.display = "none";
+
+  // Slide in
+  document.getElementById("apply-panel").style.right = "0";
+  document.getElementById("apply-overlay").style.display = "";
+
+  // Auto-trigger tailoring
+  generateApplyCoverLetter();
+}
+
+function closeApplyPanel() {
+  document.getElementById("apply-panel").style.right = "-480px";
+  document.getElementById("apply-overlay").style.display = "none";
+}
+
+async function generateApplyCoverLetter(forceRegenerate = false) {
+  if (!applyPanelJobId) return;
+  const resumeYaml = window._resumeYamlCache || "";
+
+  document.getElementById("apply-tailor-loading").style.display = "";
+  document.getElementById("apply-tailor-summary").style.display = "none";
+  document.getElementById("apply-tailor-body").style.display = "none";
+
+  if (!resumeYaml) {
+    document.getElementById("apply-tailor-loading").style.display = "none";
+    document.getElementById("apply-tailor-body").style.display = "";
+    document.getElementById("apply-cover-text").placeholder =
+      "Resume YAML not loaded — reload the page and try again.";
+    return;
+  }
+
+  try {
+    const r = await fetch("/api/apply/generate-cover-letter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: applyPanelJobId,
+        resume_yaml: resumeYaml,
+        force_regenerate: forceRegenerate,
+      })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+
+    // Render tailoring summary
+    const s = d.fit_score || 0;
+    const bc = s >= 70 ? "badge-green" : s >= 50 ? "badge-amber" : "badge-muted";
+    const matched = (d.matched_skills || []).concat(d.matched_tools || []).slice(0, 6);
+    const missing = (d.missing_skills || []).concat(d.missing_tools || []).slice(0, 4);
+    const topBlock = (d.top_blocks || [])[0];
+
+    document.getElementById("apply-fit-row").innerHTML = s > 0
+      ? `<span class="badge ${bc}" style="font-size:12px">${s}% fit</span>`
+        + (d.jd_category ? ` <span class="badge badge-muted" style="font-size:11px">${d.jd_category}</span>` : "")
+        + (d.seniority_level ? ` <span class="badge badge-muted" style="font-size:11px">${d.seniority_level}</span>` : "")
+      : "";
+
+    document.getElementById("apply-matched-row").innerHTML = matched.length
+      ? `<div style="font-size:11px;font-weight:600;color:var(--teal);margin-bottom:3px">Matched</div>
+         <div class="tag-row">${matched.map(t => `<span class="tag match">${t}</span>`).join("")}</div>`
+      : "";
+
+    document.getElementById("apply-missing-row").innerHTML = missing.length
+      ? `<div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:3px">Address in letter</div>
+         <div class="tag-row">${missing.map(t => `<span class="tag gap">${t}</span>`).join("")}</div>`
+      : "";
+
+    document.getElementById("apply-lead-row").innerHTML = topBlock
+      ? `<div style="font-size:11px;padding:6px 8px;background:var(--navy-light);border-radius:4px;color:var(--navy)">
+           Lead with: <strong>${topBlock}</strong>
+         </div>`
+      : "";
+
+    document.getElementById("apply-cover-text").value = d.cover_letter || "";
+    document.getElementById("apply-tailor-summary").style.display = "";
+    document.getElementById("apply-tailor-body").style.display = "";
+  } catch (e) {
+    document.getElementById("apply-tailor-body").style.display = "";
+    document.getElementById("apply-cover-text").value = "";
+    document.getElementById("apply-cover-text").placeholder = "Tailoring failed: " + e.message;
+  } finally {
+    document.getElementById("apply-tailor-loading").style.display = "none";
+  }
+}
+
+async function generateApplyCV() {
+  if (!applyPanelJobId) return;
+  const job = discoveredJobs.find(j => j.id === applyPanelJobId);
+  if (!job) return;
+
+  const jd = [
+    `${job.title} at ${job.company}`,
+    job.location ? `${job.location}` : "",
+    job.description_full || job.summary || job.jd_summary || "",
+  ].filter(Boolean).join("\n\n");
+
+  const btn = document.getElementById("apply-cv-btn");
+  btn.disabled = true;
+  document.getElementById("apply-cv-loading").style.display = "flex";
+  document.getElementById("apply-cv-area").style.display = "none";
+
+  const role = ROLES.find(r => activeTrack && r.id === activeTrack.id) || ROLES[0];
+  const sys = `You are an elite CV writer for AI/ML/Semantic Web roles.
+CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, ESWC 2026 first-author paper on RAG+KG (arXiv:2604.02545), MSc Data Science & AI (Liverpool 2026), Python/Java/RDF/SPARQL/RAG/LLMs, TCS backend engineering.
+RULES: ESWC paper must appear prominently. Rewrite bullets — do NOT just inject keywords. Quantify where possible.
+Return ONLY valid JSON (no markdown): {"headline":"","summary":"","experience":[{"id":"","role":"","co":"","dates":"","bullets":[]}],"projects":[{"id":"","title":"","bullets":[]}],"key_changes":""}`;
+
+  try {
+    const raw = await callClaude(sys,
+      `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}`
+    );
+    const data = parseJSON(raw);
+
+    // Build plain text
+    const lines = [
+      PROFILE.name,
+      data.headline || role.label,
+      `${PROFILE.email} | ${PROFILE.phone} | ${PROFILE.location}`,
+      PROFILE.linkedin, "",
+      "ACHIEVEMENTS",
+    ];
+    PROFILE.achievements.forEach(a => { lines.push("★ " + a.title); lines.push("  " + a.detail); });
+    lines.push("");
+    if (data.summary) { lines.push("SUMMARY"); lines.push(data.summary); lines.push(""); }
+    (data.projects || []).forEach(p => {
+      lines.push("PROJECTS"); lines.push(p.title);
+      (p.bullets || []).forEach(b => lines.push("• " + b)); lines.push("");
+    });
+    (data.experience || []).forEach(e => {
+      lines.push(`${e.role} | ${e.co} | ${e.dates || ""}`);
+      (e.bullets || []).forEach(b => lines.push("• " + b)); lines.push("");
+    });
+    lines.push("EDUCATION");
+    PROFILE.education.forEach(e => lines.push(`${e.degree} — ${e.inst} ${e.year || ""}`));
+    lines.push("", "SKILLS");
+    Object.entries(PROFILE.skills).forEach(([c, i]) => lines.push(`${c}: ${i.join(", ")}`));
+    if (data.key_changes) { lines.push("", "--- TAILORING NOTES ---", data.key_changes); }
+
+    document.getElementById("apply-cv-plain").textContent = lines.join("\n");
+    _applyCVLatex = buildLatex(data, false, role);
+
+    document.getElementById("apply-cv-area").style.display = "";
+    btn.textContent = "↻ Re-generate";
+  } catch (e) {
+    document.getElementById("apply-cv-area").style.display = "";
+    document.getElementById("apply-cv-plain").textContent = "Generation failed: " + e.message;
+  } finally {
+    document.getElementById("apply-cv-loading").style.display = "none";
+    btn.disabled = false;
+  }
+}
+
+const _dlCount = {};
+function _autoName(variant) {
+  _dlCount[variant] = (_dlCount[variant] || 0) + 1;
+  const base = PROFILE.name.toLowerCase().replace(/\s+/g, "");
+  return `${base}_${variant}_${_dlCount[variant]}`;
+}
+
+function copyApplyText(elId) {
+  const text = document.getElementById(elId).value || document.getElementById(elId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    alert("Copied to clipboard!");
+  }).catch(() => {
+    prompt("Copy this:", text);
+  });
+}
+
+function downloadApplyText(elId, filename) {
+  const text = document.getElementById(elId).value || document.getElementById(elId).textContent;
+  const blob = new Blob([text], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadApplyCVLatex() {
+  if (!_applyCVLatex) { alert("Generate the tailored CV first."); return; }
+  const blob = new Blob([_applyCVLatex], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = _autoName("cv") + ".tex";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadApplyCVPDF() {
+  if (!_applyCVLatex) { alert("Generate the tailored CV first."); return; }
+  await _downloadPDF(_applyCVLatex, _autoName("cv"), "apply-cv-pdf-btn");
+}
+
+function _buildCoverLetterLatex(text, job) {
+  const esc = s => (s || "")
+    .replace(/&/g, "\\&").replace(/%/g, "\\%").replace(/#/g, "\\#")
+    .replace(/_/g, "\\_").replace(/\$/g, "\\$").replace(/~/g, "\\textasciitilde{}");
+
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+
+  let tex = `\\documentclass[a4paper,11pt]{article}\n`;
+  tex += `\\usepackage[top=1.2in,bottom=1.2in,left=1.25in,right=1.25in]{geometry}\n`;
+  tex += `\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n\\usepackage{lmodern}\n`;
+  tex += `\\usepackage[hidelinks]{hyperref}\n\\usepackage{xcolor}\n`;
+  tex += `\\definecolor{navy}{HTML}{1A3C5E}\n`;
+  tex += `\\pagestyle{empty}\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.9em}\n`;
+  tex += `\\begin{document}\n\n`;
+
+  // Header
+  tex += `{\\large\\bfseries\\color{navy}${esc(PROFILE.name)}}\\hfill{\\small\\color{gray}${esc(today)}}\\par\n`;
+  tex += `{\\small ${esc(PROFILE.email)} $\\cdot$ ${esc(PROFILE.phone)} $\\cdot$ ${esc(PROFILE.location)}}\\par\n`;
+  tex += `{\\small \\href{${PROFILE.linkedin}}{LinkedIn}}\\par\n`;
+  tex += `\\vspace{1em}\n`;
+
+  // Addressee
+  if (job && job.company) {
+    tex += `{\\small Hiring Team}\\par\n`;
+    tex += `{\\small\\bfseries ${esc(job.company)}}\\par\n`;
+    if (job.title) tex += `{\\small Re: ${esc(job.title)}}\\par\n`;
+    tex += `\\vspace{1em}\n`;
+  }
+
+  // Body
+  paragraphs.forEach(p => {
+    tex += `${esc(p.replace(/\n/g, " "))}\\par\n\n`;
+  });
+
+  // Sign-off
+  tex += `\\vspace{1.5em}\n`;
+  tex += `Yours sincerely,\\par\\vspace{2em}\n`;
+  tex += `{\\bfseries\\color{navy}${esc(PROFILE.name)}}\\par\n`;
+
+  tex += `\\end{document}\n`;
+  return tex;
+}
+
+function downloadApplyCoverLetterLatex() {
+  const text = document.getElementById("apply-cover-text").value.trim();
+  if (!text) { alert("Cover letter is empty."); return; }
+  const job = discoveredJobs.find(j => j.id === applyPanelJobId);
+  const latex = _buildCoverLetterLatex(text, job);
+  const blob = new Blob([latex], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = _autoName("coverletter") + ".tex";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadApplyCoverLetterPDF() {
+  const text = document.getElementById("apply-cover-text").value.trim();
+  if (!text) { alert("Cover letter is empty."); return; }
+  const job = discoveredJobs.find(j => j.id === applyPanelJobId);
+  const latex = _buildCoverLetterLatex(text, job);
+  await _downloadPDF(latex, _autoName("coverletter"), "apply-cl-pdf-btn");
+}
+
+async function _downloadPDF(latex, filename, btnId) {
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.textContent = "Compiling..."; btn.disabled = true; }
+  try {
+    const r = await fetch("/api/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latex, filename })
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || "PDF generation failed");
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename + ".pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("PDF error: " + e.message);
+  } finally {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
+}
+
+async function submitApply() {
+  if (!applyPanelJobId) return;
+  const method = document.getElementById("apply-method").value;
+  const coverLetter = document.getElementById("apply-cover-text").value;
+
+  if (method === "manual") {
+    const job = discoveredJobs.find(j => j.id === applyPanelJobId);
+    const url = job?.url || job?.apply_url || "";
+    if (url) window.open(url, "_blank", "noopener");
+    _showApplyResult("success", "Link opened — apply manually in the new tab.");
+    return;
+  }
+
+  // Queue then run Easy Apply
+  document.getElementById("apply-action-area").style.display = "none";
+  document.getElementById("apply-progress").style.display = "";
+  document.getElementById("apply-progress-msg").textContent = "Queuing application...";
+
+  try {
+    // Queue
+    const qr = await fetch("/api/apply/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: coverLetter })
+    });
+    if (!qr.ok) {
+      const err = await qr.json().catch(() => ({ detail: qr.statusText }));
+      throw new Error(err.detail || "Queue failed");
+    }
+
+    document.getElementById("apply-progress-msg").textContent = "Starting Easy Apply session...";
+
+    // Run
+    const rr = await fetch(`/api/apply/run/${applyPanelJobId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cv_pdf_path: "" })
+    });
+    if (!rr.ok) throw new Error(await rr.text());
+
+    document.getElementById("apply-progress-msg").textContent = "Easy Apply running — waiting for confirmation step...";
+
+    // Poll for awaiting_confirm
+    await _pollForConfirm(applyPanelJobId);
+  } catch (e) {
+    document.getElementById("apply-progress").style.display = "none";
+    document.getElementById("apply-action-area").style.display = "";
+    _showApplyResult("error", "Apply failed: " + e.message);
+  }
+}
+
+async function _pollForConfirm(jobId) {
+  // Poll apply log every 3s for up to 3 min
+  for (let i = 0; i < 60; i++) {
+    await new Promise(res => setTimeout(res, 3000));
+    try {
+      const r = await fetch("/api/apply/log");
+      const d = await r.json();
+      const entry = (d.log || []).find(e => e.job_id === jobId);
+      if (entry && entry.status === "awaiting_confirm") {
+        _showScreenshotConfirm(entry);
+        return;
+      }
+      if (entry && entry.status === "applied") {
+        document.getElementById("apply-progress").style.display = "none";
+        _showApplyResult("success", "Application submitted!");
+        return;
+      }
+      if (entry && entry.status === "failed") {
+        document.getElementById("apply-progress").style.display = "none";
+        _showApplyResult("error", "Apply failed: " + (entry.error_message || "unknown error"));
+        return;
+      }
+    } catch (e) { /* ignore poll errors */ }
+  }
+  document.getElementById("apply-progress").style.display = "none";
+  _showApplyResult("error", "Timed out waiting for Easy Apply to reach confirmation step.");
+}
+
+function _showScreenshotConfirm(entry) {
+  document.getElementById("apply-progress").style.display = "none";
+  const area = document.getElementById("apply-screenshot-area");
+  const img = document.getElementById("apply-screenshot-img");
+  if (entry.screenshot_path) {
+    // Screenshot is served from filesystem — use static path if available
+    img.src = `/static/screenshots/${entry.screenshot_path.split("/").pop()}`;
+    img.style.display = "";
+  } else {
+    img.style.display = "none";
+  }
+  area.style.display = "";
+}
+
+async function confirmApply() {
+  if (!applyPanelJobId) return;
+  document.getElementById("apply-screenshot-area").style.display = "none";
+  document.getElementById("apply-progress").style.display = "";
+  document.getElementById("apply-progress-msg").textContent = "Submitting application...";
+  try {
+    const r = await fetch(`/api/apply/confirm/${applyPanelJobId}`, { method: "POST" });
+    const d = await r.json();
+    document.getElementById("apply-progress").style.display = "none";
+    if (d.status === "applied") {
+      _showApplyResult("success", "Application submitted successfully!");
+    } else {
+      _showApplyResult("error", "Confirm failed: " + (d.error || "unknown"));
+    }
+  } catch (e) {
+    document.getElementById("apply-progress").style.display = "none";
+    _showApplyResult("error", "Confirm error: " + e.message);
+  }
+}
+
+async function skipApply() {
+  document.getElementById("apply-screenshot-area").style.display = "none";
+  _showApplyResult("info", "Application skipped.");
+}
+
+function _showApplyResult(type, msg) {
+  const el = document.getElementById("apply-result");
+  const cls = type === "success" ? "alert-ok" : type === "error" ? "alert-err" : "alert-info";
+  el.className = "alert " + cls;
+  el.textContent = msg;
+  el.style.display = "";
+  document.getElementById("apply-action-area").style.display = "";
+}
+
+// ── Scrape trigger — Phase 5-T4 ────────────────────────────────
+async function discoverJobsWithScrape() {
+  console.log("discoverJobsWithScrape");
+  const useLI = document.getElementById("src-linkedin")?.checked;
+  const useIndeed = document.getElementById("src-indeed")?.checked;
+
+  if (!useLI && !useIndeed) {
+    return discoverJobs();
+  }
+
+  const loc = document.getElementById("loc-pref").value;
+  const extra = document.getElementById("extra-ctx").value;
+  const scrapeSource = useLI && useIndeed ? "both" : useLI ? "linkedin" : "indeed";
+  const query = (activeTrack.searchTitles || [activeTrack.label])[0];
+
+  const progressEl = document.getElementById("scrape-progress");
+  const msgEl = document.getElementById("scrape-progress-msg");
+  const barEl = document.getElementById("scrape-progress-bar");
+  const loadEl = document.getElementById("disc-loading");
+  const errEl = document.getElementById("disc-error");
+
+  progressEl.style.display = "";
+  loadEl.style.display = "flex";
+  document.getElementById("disc-msg").textContent = `Scraping ${scrapeSource}...`;
+  errEl.style.display = "none";
+  document.getElementById("disc-results").style.display = "none";
+
+  try {
+    // Kick off scrape
+    const sr = await fetch("/api/jobs/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: scrapeSource, query, location: loc || "UK", max_results: 20 })
+    });
+    if (!sr.ok) throw new Error(await sr.text());
+    const { job_id } = await sr.json();
+
+    // Poll status
+    let scraped = [];
+    for (let i = 0; i < 120; i++) {
+      await new Promise(res => setTimeout(res, 3000));
+      const st = await fetch(`/api/jobs/scrape/${job_id}/status`);
+      const s = await st.json();
+      const pct = s.total ? Math.round((s.progress / s.total) * 100) : 0;
+      barEl.style.width = pct + "%";
+      msgEl.textContent = `Scraping ${scrapeSource}... ${s.progress}/${s.total} jobs found`;
+
+      if (s.status === "complete") {
+        const res = await fetch(`/api/jobs/scrape/${job_id}/results`);
+        const rd = await res.json();
+        scraped = rd.jobs || [];
+        break;
+      }
+      if (s.status === "failed") {
+        const detail = s.traceback
+          ? `${s.error}\n\n${s.traceback}`
+          : (s.error || "Scrape failed");
+        throw new Error(detail);
+      }
+    }
+
+    progressEl.style.display = "none";
+    msgEl.textContent = `Scraped ${scraped.length} jobs. Now scoring with Claude...`;
+
+    // Merge scraped into discoveredJobs and also run Claude discover
+    discoveredJobs = scraped;
+
+    // Score with backend
+    if (scraped.length) {
+      if (!window._resumeYamlCache) {
+        console.warn("[scoring] _resumeYamlCache not loaded — skipping scoring");
+      } else {
+        try {
+          msgEl.textContent = `Scraped ${scraped.length} jobs. Scoring...`;
+          const ids = scraped.map(j => j.id);
+          const scr = await fetch("/api/jobs/score", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_ids: ids, resume_yaml: window._resumeYamlCache })
+          });
+          if (!scr.ok) {
+            const err = await scr.json().catch(() => ({ detail: scr.statusText }));
+            console.error("[scoring] API error:", err.detail);
+          } else {
+            const sd = await scr.json();
+            const scoreMap = {};
+            (sd.results || []).forEach(r => { scoreMap[r.job_id] = r; });
+            const scored = discoveredJobs.map(j => ({
+              ...j,
+              fit_score: scoreMap[j.id]?.fit_score ?? j.fit_score,
+              matched_skills: scoreMap[j.id]?.matched_skills ?? j.matched_skills ?? [],
+              missing_skills: scoreMap[j.id]?.missing_skills ?? j.missing_skills ?? [],
+            }));
+            const scoredCount = scored.filter(j => (j.fit_score || 0) > 0).length;
+            console.log(`[scoring] ${scoredCount}/${scored.length} jobs scored`);
+            discoveredJobs = scored;
+          }
+        } catch (e) {
+          console.error("[scoring] fetch failed:", e.message);
+        }
+      }
+    }
+
+    renderJobCards();
+    document.getElementById("disc-results").style.display = "block";
+    document.getElementById("disc-title").textContent = `${discoveredJobs.length} jobs found (scraped)`;
+
+  } catch (e) {
+    progressEl.style.display = "none";
+    errEl.textContent = "Scrape failed: " + e.message;
+    errEl.style.display = "block";
+  } finally {
+    loadEl.style.display = "none";
+  }
+}
+
+
 // ── PDF download ───────────────────────────────────────────────
 async function downloadPDF() {
   const latex = document.getElementById("out-latex").textContent;
@@ -813,7 +1546,7 @@ async function downloadPDF() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "cv_tailored.pdf";
+    a.download = _autoName("cv") + ".pdf";
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {

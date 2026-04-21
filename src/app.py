@@ -11,10 +11,14 @@ import hashlib
 import asyncio
 import tempfile
 import subprocess
+import traceback
+import uuid
 from pathlib import Path
+from typing import Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException
+import yaml
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from pydantic import BaseModel
@@ -23,6 +27,15 @@ app = FastAPI(title="CV Fit Studio")
 
 PUBLIC = Path(__file__).parent.parent / "public"
 app.mount("/static", StaticFiles(directory=str(PUBLIC)), name="static")
+
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 # ── env helper ─────────────────────────────────────────────────
@@ -85,16 +98,48 @@ class JobSearchRequest(BaseModel):
     days_old: int = 7  # 0 = any time
 
 
-def _dedup(jobs: list[dict]) -> list[dict]:
+def _dedup(jobs: list) -> list:
+    """Deduplicate jobs by title+company MD5.
+
+    Accepts list[dict] (legacy) or list[dict] from scrapers.
+    For scraped jobs, also checks SQLite cache to skip already-stored listings
+    and persists new ones.
+    """
+    if not jobs:
+        return jobs
+
+    # Check if these are scraper jobs (have 'description_full' key) → use cache
+    first = jobs[0] if jobs else {}
+    use_cache = isinstance(first, dict) and "description_full" in first
+
     seen: set[str] = set()
     out = []
+
+    if use_cache:
+        from cvfitengine.scrapers.cache import JobCache
+        cache = JobCache()
+
     for j in jobs:
         key = hashlib.md5(
             f"{j.get('title','').lower().strip()}{j.get('company','').lower().strip()}".encode()
         ).hexdigest()
-        if key not in seen:
-            seen.add(key)
-            out.append(j)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        if use_cache:
+            job_id = j.get("id", key)
+            if cache.exists_fresh(job_id):
+                # Already cached and fresh — still include it (from cache)
+                cached = cache.get(job_id)
+                if cached:
+                    out.append(cached)
+                continue
+            # New job — persist to cache then include
+            j["id"] = job_id
+            cache.save(j)
+
+        out.append(j)
     return out
 
 
@@ -255,12 +300,357 @@ async def generate_pdf(req: PDFRequest):
 
 
 # ══════════════════════════════════════════════════════════════
+# Scraper endpoints — Phase 1
+# ══════════════════════════════════════════════════════════════
+class ScraperRequest(BaseModel):
+    source: str  # 'linkedin' | 'indeed' | 'both'
+    query: str
+    location: str = "UK"
+    max_results: int = 20
+
+
+# In-memory job tracker: job_id -> {status, progress, results, error}
+_scrape_jobs: dict[str, dict] = {}
+
+
+async def _run_scrape(job_id: str, req: ScraperRequest) -> None:
+    _scrape_jobs[job_id]["status"] = "running"
+    try:
+        results: list[dict] = []
+
+        if req.source in ("indeed", "both"):
+            from cvfitengine.scrapers.indeed import IndeedScraper
+            scraper = IndeedScraper(req.query, req.location, req.max_results)
+            indeed_jobs = await scraper.scrape()
+            results.extend(indeed_jobs)
+            _scrape_jobs[job_id]["progress"] = len(results)
+
+        if req.source in ("linkedin", "both"):
+            from cvfitengine.scrapers.linkedin import LinkedInScraper
+            scraper = LinkedInScraper(req.query, req.location, req.max_results)
+            li_jobs = await scraper.scrape()
+            results.extend(li_jobs)
+            _scrape_jobs[job_id]["progress"] = len(results)
+
+        deduped = _dedup(results)
+        _scrape_jobs[job_id]["status"] = "complete"
+        _scrape_jobs[job_id]["results"] = deduped
+        _scrape_jobs[job_id]["total"] = len(deduped)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"\n[scrape:{job_id}] FAILED\n{tb}")
+        _scrape_jobs[job_id]["status"] = "failed"
+        _scrape_jobs[job_id]["error"] = str(e)
+        _scrape_jobs[job_id]["traceback"] = tb
+
+
+@app.post("/api/jobs/scrape")
+async def scrape_jobs(req: ScraperRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    _scrape_jobs[job_id] = {
+        "status": "queued",
+        "progress": 0,
+        "total": req.max_results,
+        "results": [],
+        "error": None,
+    }
+    background_tasks.add_task(_run_scrape, job_id, req)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/jobs/scrape/{job_id}/status")
+async def scrape_status(job_id: str):
+    info = _scrape_jobs.get(job_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Scrape job not found")
+    return {
+        "job_id": job_id,
+        "status": info["status"],
+        "progress": info.get("progress", 0),
+        "total": info.get("total", 0),
+        "result_count": len(info.get("results", [])),
+        "error": info.get("error"),
+        "traceback": info.get("traceback"),
+    }
+
+
+@app.get("/api/jobs/scrape/{job_id}/results")
+async def scrape_results(job_id: str):
+    info = _scrape_jobs.get(job_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Scrape job not found")
+    return {"jobs": info.get("results", []), "status": info["status"]}
+
+
+# ══════════════════════════════════════════════════════════════
+# Batch scoring — Phase 3
+# ══════════════════════════════════════════════════════════════
+class BatchScoreRequest(BaseModel):
+    job_ids: list[str]
+    resume_yaml: str  # YAML string of the resume form
+
+
+class BatchScoreResult(BaseModel):
+    job_id: str
+    fit_score: float
+    matched_skills: list[str]
+    matched_tools: list[str]
+    missing_skills: list[str]
+    missing_tools: list[str]
+    coverage_pct: float
+    jd_category: str = ""
+    seniority_level: str = ""
+
+
+def _load_resume_from_yaml(resume_yaml: str):
+    from cvfitengine.core.types import ResumeForm
+    data = yaml.safe_load(resume_yaml)
+    return ResumeForm(**data)
+
+
+def _score_one(job: dict, resume) -> dict:
+    from cvfitengine.scoring.score import score_job
+    from cvfitengine.scoring.gaps import compute_gaps
+
+    score_result = score_job(job, resume)
+    gap_result = compute_gaps(job, resume)
+    return {
+        "job_id": job.get("id", ""),
+        "fit_score": score_result["fit_score"],
+        "matched_skills": score_result["matched_skills"],
+        "matched_tools": score_result["matched_tools"],
+        "missing_skills": gap_result["missing_skills"],
+        "missing_tools": gap_result["missing_tools"],
+        "coverage_pct": gap_result["coverage_pct"],
+        "jd_category": score_result["jd_category"],
+        "seniority_level": score_result["seniority_level"],
+    }
+
+
+@app.post("/api/jobs/score")
+async def score_jobs_batch(req: BatchScoreRequest):
+    from cvfitengine.scrapers.cache import JobCache
+
+    try:
+        resume = _load_resume_from_yaml(req.resume_yaml)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid resume YAML: {e}")
+
+    cache = JobCache()
+    results = []
+
+    async def _score_and_cache(job_id: str):
+        job = cache.get(job_id)
+        if not job:
+            return {"job_id": job_id, "error": "Job not found in cache"}
+        result = _score_one(job, resume)
+        cache.update_score(
+            job_id,
+            result["fit_score"],
+            result["missing_skills"] + result["missing_tools"],
+        )
+        return result
+
+    tasks = [_score_and_cache(jid) for jid in req.job_ids]
+    results = await asyncio.gather(*tasks)
+    return {"results": list(results)}
+
+
+@app.get("/api/jobs/ranked")
+async def ranked_jobs(
+    min_score: float = 0.0,
+    limit: int = 50,
+    source: Optional[str] = None,
+):
+    from cvfitengine.scrapers.cache import JobCache
+    cache = JobCache()
+    jobs = cache.list_ranked(min_score=min_score, limit=limit, source=source)
+    return {"jobs": jobs, "total": len(jobs)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Apply endpoints — Phase 4
+# ══════════════════════════════════════════════════════════════
+class CoverLetterRequest(BaseModel):
+    job_id: str
+    resume_yaml: str
+    force_regenerate: bool = False
+
+
+class QueueApplyRequest(BaseModel):
+    job_id: str
+    method: str = "easy_apply"
+    cover_letter: str = ""
+
+
+class RunApplyRequest(BaseModel):
+    cv_pdf_path: str = ""
+
+
+@app.post("/api/apply/generate-cover-letter")
+async def gen_cover_letter(req: CoverLetterRequest):
+    from cvfitengine.scrapers.cache import JobCache
+    from cvfitengine.apply.cover_letter import generate_cover_letter
+    from cvfitengine.scoring.score import score_job
+
+    cache = JobCache()
+    job = cache.get(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found in cache")
+
+    try:
+        resume = _load_resume_from_yaml(req.resume_yaml)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid resume YAML: {e}")
+
+    score_result = _score_one(job, resume)
+    letter = generate_cover_letter(
+        job, resume, score_result, force_regenerate=req.force_regenerate
+    )
+
+    from cvfitengine.scoring.gaps import compute_gaps
+    gaps = compute_gaps(job, resume)
+
+    fit_score = score_result.get("fit_score", 0)
+    return {
+        "cover_letter": letter,
+        "fit_score": round(fit_score * 100) if fit_score <= 1 else fit_score,
+        "matched_skills": score_result.get("matched_skills", []),
+        "matched_tools": score_result.get("matched_tools", []),
+        "missing_skills": gaps.get("missing_skills", []),
+        "missing_tools": gaps.get("missing_tools", []),
+        "top_blocks": score_result.get("top_blocks", []),
+        "jd_category": score_result.get("jd_category", ""),
+        "seniority_level": score_result.get("seniority_level", ""),
+    }
+
+
+@app.post("/api/apply/queue")
+async def queue_apply(req: QueueApplyRequest):
+    from cvfitengine.scrapers.cache import JobCache
+    from cvfitengine.apply.queue import ApplyQueue, ApplyError
+
+    cache = JobCache()
+    job = cache.get(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found in cache")
+
+    q = ApplyQueue()
+    try:
+        q.enqueue(req.job_id, job.get("title", ""), job.get("company", ""), req.method)
+    except ApplyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    cache.update_status(req.job_id, "queued")
+    return {"queued": True}
+
+
+# Active apply tasks: job_id -> asyncio.Task
+_apply_tasks: dict[str, asyncio.Task] = {}
+
+
+@app.post("/api/apply/run/{job_id}")
+async def run_apply(job_id: str, req: RunApplyRequest, background_tasks: BackgroundTasks):
+    from cvfitengine.scrapers.cache import JobCache
+    from cvfitengine.apply.queue import ApplyQueue
+    from cvfitengine.apply.linkedin_apply import apply_easy
+
+    cache = JobCache()
+    job = cache.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found in cache")
+
+    q = ApplyQueue()
+    entry = q.get(job_id)
+    if not entry:
+        raise HTTPException(status_code=400, detail="Job not in apply queue — call /api/apply/queue first")
+
+    cached_cl = cache.get_cover_letter(job_id)
+
+    async def _do_apply():
+        # Minimal resume shell for apply_easy (just needs person fields)
+        class _FakePerson:
+            full_name = ""; email = ""; phone = ""; location = ""
+        class _FakeResume:
+            class profile:
+                person = _FakePerson()
+
+        result = await apply_easy(job, _FakeResume(), cached_cl or "", req.cv_pdf_path)
+        if result["status"] == "awaiting_confirm":
+            q.mark_awaiting_confirm(
+                job_id,
+                cover_letter=cached_cl or "",
+                screenshot_path=result.get("screenshot_path", ""),
+            )
+        elif result["status"] == "failed":
+            q.mark_failed(job_id, result.get("error", "unknown"))
+            cache.update_status(job_id, "failed")
+        return result
+
+    task = asyncio.create_task(_do_apply())
+    _apply_tasks[job_id] = task
+
+    # Give it a moment to start
+    await asyncio.sleep(0.1)
+    return {"status": "running", "message": "Easy Apply session started"}
+
+
+@app.post("/api/apply/confirm/{job_id}")
+async def confirm_apply_endpoint(job_id: str):
+    from cvfitengine.scrapers.cache import JobCache
+    from cvfitengine.apply.queue import ApplyQueue
+    from cvfitengine.apply.linkedin_apply import confirm_apply
+
+    result = await confirm_apply(job_id)
+    cache = JobCache()
+    q = ApplyQueue()
+
+    if result["status"] == "applied":
+        q.mark_applied(job_id)
+        cache.update_status(job_id, "applied")
+    else:
+        q.mark_failed(job_id, result.get("error", "confirm failed"))
+        cache.update_status(job_id, "failed")
+
+    screenshot_url = ""
+    sp = result.get("screenshot_path", "")
+    if sp:
+        screenshot_url = f"/static/screenshots/{Path(sp).name}"
+
+    return {
+        "status": result["status"],
+        "screenshot_url": screenshot_url,
+        "error": result.get("error"),
+    }
+
+
+@app.get("/api/apply/log")
+async def apply_log():
+    from cvfitengine.apply.queue import ApplyQueue
+    q = ApplyQueue()
+    return {"log": q.list_all()}
+
+
+# ══════════════════════════════════════════════════════════════
+# Resume YAML
+# ══════════════════════════════════════════════════════════════
+_RESUME_YAML_PATH = Path(__file__).parent.parent / "data" / "forms" / "users" / "resume_form_sowjanya.yaml"
+
+
+@app.get("/api/resume-yaml", response_class=Response)
+async def get_resume_yaml():
+    if not _RESUME_YAML_PATH.exists():
+        raise HTTPException(status_code=404, detail="Resume YAML not found")
+    return Response(content=_RESUME_YAML_PATH.read_text(), media_type="text/plain")
+
+
 # Health
 # ══════════════════════════════════════════════════════════════
 @app.get("/api/health")
 async def health():
     return {
         "status": "ok",
+        "api_key_set": bool(env("ANTHROPIC_API_KEY")),
         "anthropic": bool(env("ANTHROPIC_API_KEY")),
         "reed": bool(env("REED_API_KEY")),
         "adzuna": bool(env("ADZUNA_APP_ID")) and bool(env("ADZUNA_APP_KEY")),
