@@ -4,3 +4,7 @@ __pycache__/
 data/forms/users/sowjanya.yaml
 data/runs/
 EOF
+# Playwright persistent context (contains login cookies)
+~/.cvfit/
+# Local env
+.env
