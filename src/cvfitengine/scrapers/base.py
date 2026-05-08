@@ -28,11 +28,13 @@ class BaseScraper(ABC):
         location: str,
         max_results: int = 20,
         headless: bool = True,
+        days_old: int = 7,
     ) -> None:
         self.query = query
         self.location = location
         self.max_results = max_results
         self.headless = headless
+        self.days_old = days_old
         self._semaphore = asyncio.Semaphore(RATE_LIMIT)
         self._browser = None
         self._context = None

@@ -307,6 +307,7 @@ class ScraperRequest(BaseModel):
     query: str
     location: str = "UK"
     max_results: int = 20
+    days_old: int = 7  # 0 = any time
 
 
 # In-memory job tracker: job_id -> {status, progress, results, error}
@@ -320,14 +321,14 @@ async def _run_scrape(job_id: str, req: ScraperRequest) -> None:
 
         if req.source in ("indeed", "both"):
             from cvfitengine.scrapers.indeed import IndeedScraper
-            scraper = IndeedScraper(req.query, req.location, req.max_results)
+            scraper = IndeedScraper(req.query, req.location, req.max_results, days_old=req.days_old)
             indeed_jobs = await scraper.scrape()
             results.extend(indeed_jobs)
             _scrape_jobs[job_id]["progress"] = len(results)
 
         if req.source in ("linkedin", "both"):
             from cvfitengine.scrapers.linkedin import LinkedInScraper
-            scraper = LinkedInScraper(req.query, req.location, req.max_results)
+            scraper = LinkedInScraper(req.query, req.location, req.max_results, days_old=req.days_old)
             li_jobs = await scraper.scrape()
             results.extend(li_jobs)
             _scrape_jobs[job_id]["progress"] = len(results)
@@ -380,6 +381,50 @@ async def scrape_results(job_id: str):
     if not info:
         raise HTTPException(status_code=404, detail="Scrape job not found")
     return {"jobs": info.get("results", []), "status": info["status"]}
+
+
+# ══════════════════════════════════════════════════════════════
+# JD trigger — Phase 2
+# ══════════════════════════════════════════════════════════════
+class JDTriggerRequest(BaseModel):
+    jd_text: str
+    location: str = "UK"
+    source: str = "both"
+    days_old: int = 7
+    max_results: int = 20
+
+
+class JDTriggerResponse(BaseModel):
+    scrape_job_id: str
+    extracted_title: str
+    extracted_keywords: list[str]
+
+
+@app.post("/api/jd/trigger", response_model=JDTriggerResponse)
+async def jd_trigger(req: JDTriggerRequest, background_tasks: BackgroundTasks):
+    """Parse a raw JD with Claude, extract role+keywords, kick off a scrape."""
+    from cvfitengine.parsing.jd_parser import parse_job
+
+    job_spec = parse_job(req.jd_text)
+    query = job_spec.title or "software engineer"
+    keywords = (job_spec.keywords or [])[:10]
+
+    scrape_req = ScraperRequest(
+        source=req.source,
+        query=query,
+        location=req.location,
+        max_results=req.max_results,
+        days_old=req.days_old,
+    )
+    job_id = str(uuid.uuid4())
+    _scrape_jobs[job_id] = {"status": "queued", "progress": 0, "total": 0, "results": [], "error": None}
+    background_tasks.add_task(_run_scrape, job_id, scrape_req)
+
+    return JDTriggerResponse(
+        scrape_job_id=job_id,
+        extracted_title=query,
+        extracted_keywords=keywords,
+    )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -477,10 +522,58 @@ class CoverLetterRequest(BaseModel):
     force_regenerate: bool = False
 
 
+APPLICATIONS_DIR = Path.home() / ".cvfit" / "applications"
+
+
+def _slugify(text: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:40]
+
+
+def _save_application_folder(job: dict, cover_letter: str, jd_text: str = "", cv_latex: str = "") -> None:
+    import json as _json
+    from datetime import datetime
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    company = _slugify(job.get("company", "unknown"))
+    title = _slugify(job.get("title", "role"))
+    folder = APPLICATIONS_DIR / f"{date_str}_{company}_{title}"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    if jd_text:
+        (folder / "job_description.txt").write_text(jd_text, encoding="utf-8")
+    elif job.get("description_full"):
+        (folder / "job_description.txt").write_text(job["description_full"], encoding="utf-8")
+
+    if cover_letter:
+        (folder / "cover_letter.txt").write_text(cover_letter, encoding="utf-8")
+
+    if cv_latex:
+        (folder / "cv_tailored.tex").write_text(cv_latex, encoding="utf-8")
+
+    status_path = folder / "status.json"
+    if not status_path.exists():
+        status = {
+            "job_id": job.get("id", ""),
+            "company": job.get("company", ""),
+            "job_title": job.get("title", ""),
+            "source": job.get("source", ""),
+            "apply_url": job.get("apply_url", job.get("url", "")),
+            "stage": "queued",
+            "stages_log": [{"stage": "queued", "at": datetime.utcnow().isoformat()}],
+            "notes": "",
+            "follow_up_due": None,
+            "fit_score": job.get("fit_score", 0),
+            "skill_gaps": job.get("missing_skills", []),
+        }
+        status_path.write_text(_json.dumps(status, indent=2), encoding="utf-8")
+
+
 class QueueApplyRequest(BaseModel):
     job_id: str
     method: str = "easy_apply"
     cover_letter: str = ""
+    jd_text: str = ""
+    cv_latex: str = ""
 
 
 class RunApplyRequest(BaseModel):
@@ -542,6 +635,7 @@ async def queue_apply(req: QueueApplyRequest):
         raise HTTPException(status_code=409, detail=str(e))
 
     cache.update_status(req.job_id, "queued")
+    _save_application_folder(job, req.cover_letter, req.jd_text, req.cv_latex)
     return {"queued": True}
 
 
@@ -655,6 +749,111 @@ async def health():
         "reed": bool(env("REED_API_KEY")),
         "adzuna": bool(env("ADZUNA_APP_ID")) and bool(env("ADZUNA_APP_KEY")),
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# Tracker — Phase 4
+# ══════════════════════════════════════════════════════════════
+import json as _json
+from datetime import datetime as _dt
+
+
+def _load_status(folder: Path) -> dict | None:
+    sp = folder / "status.json"
+    if not sp.exists():
+        return None
+    try:
+        return _json.loads(sp.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_status(folder: Path, status: dict) -> None:
+    (folder / "status.json").write_text(_json.dumps(status, indent=2), encoding="utf-8")
+
+
+def _find_app_folder(job_id: str) -> Path | None:
+    if not APPLICATIONS_DIR.exists():
+        return None
+    for folder in APPLICATIONS_DIR.iterdir():
+        if not folder.is_dir():
+            continue
+        s = _load_status(folder)
+        if s and s.get("job_id") == job_id:
+            return folder
+    return None
+
+
+@app.get("/api/tracker/list")
+async def tracker_list():
+    if not APPLICATIONS_DIR.exists():
+        return {"applications": []}
+    apps = []
+    for folder in sorted(APPLICATIONS_DIR.iterdir()):
+        if not folder.is_dir():
+            continue
+        s = _load_status(folder)
+        if s:
+            apps.append(s)
+    return {"applications": apps}
+
+
+@app.patch("/api/tracker/{job_id}/stage")
+async def tracker_update_stage(job_id: str, body: dict):
+    folder = _find_app_folder(job_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Application not found")
+    s = _load_status(folder)
+    stage = body.get("stage", "")
+    s["stage"] = stage
+    s.setdefault("stages_log", []).append({"stage": stage, "at": _dt.utcnow().isoformat()})
+    _save_status(folder, s)
+    return {"ok": True}
+
+
+@app.patch("/api/tracker/{job_id}/notes")
+async def tracker_update_notes(job_id: str, body: dict):
+    folder = _find_app_folder(job_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Application not found")
+    s = _load_status(folder)
+    s["notes"] = body.get("notes", "")
+    _save_status(folder, s)
+    return {"ok": True}
+
+
+@app.patch("/api/tracker/{job_id}/follow_up")
+async def tracker_follow_up(job_id: str, body: dict):
+    folder = _find_app_folder(job_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Application not found")
+    s = _load_status(folder)
+    s["follow_up_due"] = body.get("follow_up_due")
+    _save_status(folder, s)
+    return {"ok": True}
+
+
+@app.get("/api/tracker/{job_id}/files")
+async def tracker_files(job_id: str):
+    folder = _find_app_folder(job_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Application not found")
+    files = [f.name for f in folder.iterdir() if f.is_file()]
+    return {"files": files}
+
+
+@app.get("/api/tracker/{job_id}/file/{filename}")
+async def tracker_get_file(job_id: str, filename: str):
+    # Prevent path traversal
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    folder = _find_app_folder(job_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Application not found")
+    fpath = folder / filename
+    if not fpath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return Response(content=fpath.read_text(encoding="utf-8"), media_type="text/plain")
 
 
 # ══════════════════════════════════════════════════════════════

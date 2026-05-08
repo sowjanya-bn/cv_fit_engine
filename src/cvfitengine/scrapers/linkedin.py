@@ -33,9 +33,10 @@ class LinkedInScraper(BaseScraper):
         location: str,
         max_results: int = 20,
         easy_apply_only: bool = False,
+        days_old: int = 7,
     ) -> None:
         # LinkedIn must always run visible (headless=False)
-        super().__init__(query=query, location=location, max_results=max_results, headless=False)
+        super().__init__(query=query, location=location, max_results=max_results, headless=False, days_old=days_old)
         self.easy_apply_only = easy_apply_only
 
     def _context_subdir(self) -> str:
@@ -65,6 +66,12 @@ class LinkedInScraper(BaseScraper):
                 return val
         return (self.location, None)
 
+    _TPR_MAP = {
+        1: "r86400",
+        7: "r604800",
+        30: "r2592000",
+    }
+
     def _build_url(self, start: int = 0) -> str:
         location_name, geo_id = self._resolve_location()
         params = {
@@ -76,6 +83,11 @@ class LinkedInScraper(BaseScraper):
             params["geoId"] = geo_id
         if self.easy_apply_only:
             params["f_LF"] = "f_AL"
+        if self.days_old > 0:
+            tpr = self._TPR_MAP.get(self.days_old)
+            if not tpr:
+                tpr = "r604800" if self.days_old <= 7 else "r2592000"
+            params["f_TPR"] = tpr
         return self.BASE_URL + "?" + urllib.parse.urlencode(params)
 
     async def _ensure_logged_in(self, page) -> bool:

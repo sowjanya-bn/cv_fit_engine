@@ -32,7 +32,7 @@ function switchTab(t) {
   });
   if (t === "shortlist") renderShortlist();
   if (t === "tailor") populateTailorSelect();
-  if (t === "applications") loadApplicationLog();
+  if (t === "applications") loadTracker();
   if (t === "output" && !lastOutput) {
     document.getElementById("out-empty").style.display = "";
     document.getElementById("out-area").style.display = "none";
@@ -992,6 +992,9 @@ function openApplyPanel(jobId) {
   document.getElementById("apply-progress").style.display = "none";
   document.getElementById("apply-screenshot-area").style.display = "none";
   document.getElementById("apply-result").style.display = "none";
+  document.getElementById("cl-preview-panel").style.display = "none";
+  document.getElementById("cl-confirm-btn").style.display = "none";
+  document.getElementById("apply-status-badge").style.display = "none";
 
   // Slide in
   document.getElementById("apply-panel").style.right = "0";
@@ -1067,6 +1070,10 @@ async function generateApplyCoverLetter(forceRegenerate = false) {
     document.getElementById("apply-cover-text").value = d.cover_letter || "";
     document.getElementById("apply-tailor-summary").style.display = "";
     document.getElementById("apply-tailor-body").style.display = "";
+    // Populate cover letter preview panel
+    document.getElementById("cl-preview-ta").value = d.cover_letter || "";
+    document.getElementById("cl-preview-panel").style.display = "";
+    document.getElementById("cl-confirm-btn").style.display = "";
   } catch (e) {
     document.getElementById("apply-tailor-body").style.display = "";
     document.getElementById("apply-cover-text").value = "";
@@ -1405,6 +1412,61 @@ function _showApplyResult(type, msg) {
 }
 
 // ── Scrape trigger — Phase 5-T4 ────────────────────────────────
+async function _pollScrapeAndRender(job_id, msgEl) {
+  const barEl = document.getElementById("scrape-progress-bar");
+  let scraped = [];
+  for (let i = 0; i < 120; i++) {
+    await new Promise(res => setTimeout(res, 3000));
+    const st = await fetch(`/api/jobs/scrape/${job_id}/status`);
+    const s = await st.json();
+    const pct = s.total ? Math.round((s.progress / s.total) * 100) : 0;
+    if (barEl) barEl.style.width = pct + "%";
+    if (msgEl) msgEl.textContent = `Scraping... ${s.progress}/${s.total} jobs found`;
+
+    if (s.status === "complete") {
+      const res = await fetch(`/api/jobs/scrape/${job_id}/results`);
+      const rd = await res.json();
+      scraped = rd.jobs || [];
+      break;
+    }
+    if (s.status === "failed") {
+      const detail = s.traceback ? `${s.error}\n\n${s.traceback}` : (s.error || "Scrape failed");
+      throw new Error(detail);
+    }
+  }
+
+  if (msgEl) msgEl.textContent = `${scraped.length} jobs found. Scoring...`;
+  discoveredJobs = scraped;
+
+  if (scraped.length && window._resumeYamlCache) {
+    try {
+      const ids = scraped.map(j => j.id);
+      const scr = await fetch("/api/jobs/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_ids: ids, resume_yaml: window._resumeYamlCache })
+      });
+      if (scr.ok) {
+        const sd = await scr.json();
+        const scoreMap = {};
+        (sd.results || []).forEach(r => { scoreMap[r.job_id] = r; });
+        discoveredJobs = discoveredJobs.map(j => ({
+          ...j,
+          fit_score: scoreMap[j.id]?.fit_score ?? j.fit_score,
+          matched_skills: scoreMap[j.id]?.matched_skills ?? j.matched_skills ?? [],
+          missing_skills: scoreMap[j.id]?.missing_skills ?? j.missing_skills ?? [],
+        }));
+      }
+    } catch (e) {
+      console.error("[scoring] fetch failed:", e.message);
+    }
+  }
+
+  renderJobCards();
+  document.getElementById("disc-results").style.display = "block";
+  document.getElementById("disc-title").textContent = `${discoveredJobs.length} jobs found (scraped)`;
+}
+
 async function discoverJobsWithScrape() {
   console.log("discoverJobsWithScrape");
   const useLI = document.getElementById("src-linkedin")?.checked;
@@ -1415,13 +1477,12 @@ async function discoverJobsWithScrape() {
   }
 
   const loc = document.getElementById("loc-pref").value;
-  const extra = document.getElementById("extra-ctx").value;
   const scrapeSource = useLI && useIndeed ? "both" : useLI ? "linkedin" : "indeed";
   const query = (activeTrack.searchTitles || [activeTrack.label])[0];
+  const daysOld = jobRecencyFilter === "week" ? 7 : jobRecencyFilter === "month" ? 30 : 0;
 
   const progressEl = document.getElementById("scrape-progress");
   const msgEl = document.getElementById("scrape-progress-msg");
-  const barEl = document.getElementById("scrape-progress-bar");
   const loadEl = document.getElementById("disc-loading");
   const errEl = document.getElementById("disc-error");
 
@@ -1432,85 +1493,15 @@ async function discoverJobsWithScrape() {
   document.getElementById("disc-results").style.display = "none";
 
   try {
-    // Kick off scrape
     const sr = await fetch("/api/jobs/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: scrapeSource, query, location: loc || "UK", max_results: 20 })
+      body: JSON.stringify({ source: scrapeSource, query, location: loc || "UK", max_results: 20, days_old: daysOld })
     });
     if (!sr.ok) throw new Error(await sr.text());
     const { job_id } = await sr.json();
-
-    // Poll status
-    let scraped = [];
-    for (let i = 0; i < 120; i++) {
-      await new Promise(res => setTimeout(res, 3000));
-      const st = await fetch(`/api/jobs/scrape/${job_id}/status`);
-      const s = await st.json();
-      const pct = s.total ? Math.round((s.progress / s.total) * 100) : 0;
-      barEl.style.width = pct + "%";
-      msgEl.textContent = `Scraping ${scrapeSource}... ${s.progress}/${s.total} jobs found`;
-
-      if (s.status === "complete") {
-        const res = await fetch(`/api/jobs/scrape/${job_id}/results`);
-        const rd = await res.json();
-        scraped = rd.jobs || [];
-        break;
-      }
-      if (s.status === "failed") {
-        const detail = s.traceback
-          ? `${s.error}\n\n${s.traceback}`
-          : (s.error || "Scrape failed");
-        throw new Error(detail);
-      }
-    }
-
+    await _pollScrapeAndRender(job_id, msgEl);
     progressEl.style.display = "none";
-    msgEl.textContent = `Scraped ${scraped.length} jobs. Now scoring with Claude...`;
-
-    // Merge scraped into discoveredJobs and also run Claude discover
-    discoveredJobs = scraped;
-
-    // Score with backend
-    if (scraped.length) {
-      if (!window._resumeYamlCache) {
-        console.warn("[scoring] _resumeYamlCache not loaded — skipping scoring");
-      } else {
-        try {
-          msgEl.textContent = `Scraped ${scraped.length} jobs. Scoring...`;
-          const ids = scraped.map(j => j.id);
-          const scr = await fetch("/api/jobs/score", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ job_ids: ids, resume_yaml: window._resumeYamlCache })
-          });
-          if (!scr.ok) {
-            const err = await scr.json().catch(() => ({ detail: scr.statusText }));
-            console.error("[scoring] API error:", err.detail);
-          } else {
-            const sd = await scr.json();
-            const scoreMap = {};
-            (sd.results || []).forEach(r => { scoreMap[r.job_id] = r; });
-            const scored = discoveredJobs.map(j => ({
-              ...j,
-              fit_score: scoreMap[j.id]?.fit_score ?? j.fit_score,
-              matched_skills: scoreMap[j.id]?.matched_skills ?? j.matched_skills ?? [],
-              missing_skills: scoreMap[j.id]?.missing_skills ?? j.missing_skills ?? [],
-            }));
-            const scoredCount = scored.filter(j => (j.fit_score || 0) > 0).length;
-            console.log(`[scoring] ${scoredCount}/${scored.length} jobs scored`);
-            discoveredJobs = scored;
-          }
-        } catch (e) {
-          console.error("[scoring] fetch failed:", e.message);
-        }
-      }
-    }
-
-    renderJobCards();
-    document.getElementById("disc-results").style.display = "block";
-    document.getElementById("disc-title").textContent = `${discoveredJobs.length} jobs found (scraped)`;
-
   } catch (e) {
     progressEl.style.display = "none";
     errEl.textContent = "Scrape failed: " + e.message;
@@ -1520,6 +1511,118 @@ async function discoverJobsWithScrape() {
   }
 }
 
+async function triggerFromJD() {
+  const jd = document.getElementById("jd-trigger-ta").value.trim();
+  const msg = document.getElementById("jd-trigger-msg");
+  if (!jd) { msg.textContent = "Paste a JD first."; return; }
+
+  const loc = document.getElementById("loc-pref")?.value || "UK";
+  const useLI = document.getElementById("src-linkedin")?.checked;
+  const useIndeed = document.getElementById("src-indeed")?.checked;
+  const source = useLI && useIndeed ? "both" : useIndeed ? "indeed" : "linkedin";
+  const daysOld = jobRecencyFilter === "week" ? 7 : jobRecencyFilter === "month" ? 30 : 0;
+
+  msg.textContent = "Extracting role from JD...";
+
+  try {
+    const r = await fetch("/api/jd/trigger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jd_text: jd, location: loc, source, days_old: daysOld, max_results: 20 })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { scrape_job_id, extracted_title } = await r.json();
+
+    msg.textContent = `Searching for "${extracted_title}" roles...`;
+    document.getElementById("scrape-progress").style.display = "";
+    document.getElementById("disc-loading").style.display = "flex";
+    document.getElementById("disc-error").style.display = "none";
+    document.getElementById("disc-results").style.display = "none";
+
+    await _pollScrapeAndRender(scrape_job_id, document.getElementById("scrape-progress-msg"));
+    document.getElementById("scrape-progress").style.display = "none";
+    document.getElementById("disc-loading").style.display = "none";
+    msg.textContent = `Done — ${discoveredJobs.length} jobs found for "${extracted_title}"`;
+  } catch (e) {
+    document.getElementById("scrape-progress").style.display = "none";
+    document.getElementById("disc-loading").style.display = "none";
+    msg.textContent = "Error: " + e.message;
+  }
+}
+
+
+// ── Cover letter confirm + apply status polling ────────────────
+async function confirmApplyWithCL() {
+  const editedCL = document.getElementById("cl-preview-ta").value.trim();
+  if (!applyPanelJobId) return;
+  const method = document.getElementById("apply-method").value;
+
+  document.getElementById("cl-confirm-btn").disabled = true;
+  document.getElementById("apply-status-badge").style.display = "";
+  document.getElementById("apply-status-badge").textContent = "Queuing application...";
+
+  try {
+    if (method === "manual") {
+      const job = discoveredJobs.find(j => j.id === applyPanelJobId);
+      const url = job?.url || job?.apply_url || "";
+      if (url) window.open(url, "_blank", "noopener");
+      document.getElementById("apply-status-badge").textContent = "Link opened — apply manually.";
+      // Save folder with edited cover letter
+      await fetch("/api/apply/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL })
+      });
+      return;
+    }
+
+    const qr = await fetch("/api/apply/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL })
+    });
+    if (!qr.ok) {
+      const err = await qr.json().catch(() => ({ detail: qr.statusText }));
+      throw new Error(err.detail || "Queue failed");
+    }
+    document.getElementById("apply-status-badge").textContent = "Queued. Starting Easy Apply...";
+
+    const rr = await fetch(`/api/apply/run/${applyPanelJobId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cv_pdf_path: "" })
+    });
+    if (!rr.ok) throw new Error(await rr.text());
+
+    _pollApplyStatus(applyPanelJobId);
+  } catch (e) {
+    document.getElementById("apply-status-badge").textContent = "Error: " + e.message;
+    document.getElementById("cl-confirm-btn").disabled = false;
+  }
+}
+
+async function _pollApplyStatus(jobId) {
+  const badge = document.getElementById("apply-status-badge");
+  for (let i = 0; i < 60; i++) {
+    await new Promise(res => setTimeout(res, 3000));
+    try {
+      const r = await fetch("/api/apply/log");
+      const d = await r.json();
+      const entry = (d.log || []).find(e => e.job_id === jobId);
+      if (!entry) continue;
+      const { status } = entry;
+      badge.textContent = `Status: ${status}`;
+      if (status === "applied") { badge.textContent = "✓ Application submitted!"; return; }
+      if (status === "failed") { badge.textContent = "✗ Apply failed: " + (entry.error_message || "unknown"); return; }
+      if (status === "awaiting_confirm") {
+        badge.textContent = "⏳ Awaiting your confirmation (see screenshot below)";
+        _showScreenshotConfirm(entry);
+        return;
+      }
+    } catch (e) { /* ignore */ }
+  }
+  badge.textContent = "Timed out waiting for apply to complete.";
+}
 
 // ── PDF download ───────────────────────────────────────────────
 async function downloadPDF() {
@@ -1554,5 +1657,195 @@ async function downloadPDF() {
   } finally {
     btn.textContent = orig;
     btn.disabled = false;
+  }
+}
+
+// ── Tracker / Kanban ───────────────────────────────────────────
+const KANBAN_STAGES = ["queued", "applied", "interview", "offer", "rejected", "withdrawn"];
+const STAGE_LABELS = { queued: "Queued", applied: "Applied", interview: "Interview", offer: "Offer", rejected: "Rejected", withdrawn: "Withdrawn" };
+let _trackerData = [];
+let _drawerJobId = null;
+
+async function loadTracker() {
+  const loading = document.getElementById("tracker-loading");
+  const empty = document.getElementById("tracker-empty");
+  const board = document.getElementById("kanban-board");
+  const stats = document.getElementById("tracker-stats");
+
+  loading.style.display = "flex";
+  empty.style.display = "none";
+  board.innerHTML = "";
+
+  try {
+    const r = await fetch("/api/tracker/list");
+    const d = await r.json();
+    _trackerData = d.applications || [];
+
+    if (!_trackerData.length) {
+      empty.style.display = "";
+      stats.innerHTML = "";
+      return;
+    }
+
+    // Stats bar
+    const total = _trackerData.length;
+    const now = new Date();
+    const weekAgo = new Date(now - 7 * 86400000);
+    const thisWeek = _trackerData.filter(a => new Date((a.stages_log?.[0]?.at || "")) >= weekAgo).length;
+    const interviews = _trackerData.filter(a => a.stage === "interview" || a.stage === "offer").length;
+    const applied = _trackerData.filter(a => a.stage !== "queued").length;
+    const responseRate = applied > 0 ? Math.round((interviews / applied) * 100) : 0;
+    const avgFit = _trackerData.length
+      ? Math.round(_trackerData.reduce((s, a) => s + (a.fit_score || 0) * 100, 0) / _trackerData.length)
+      : 0;
+
+    stats.innerHTML = `
+      <span>Total: <strong>${total}</strong></span>
+      <span>This week: <strong>${thisWeek}</strong></span>
+      <span>Response rate: <strong>${responseRate}%</strong></span>
+      <span>Avg fit: <strong>${avgFit}%</strong></span>
+    `;
+
+    // Build Kanban columns
+    const byStage = {};
+    KANBAN_STAGES.forEach(s => { byStage[s] = []; });
+    _trackerData.forEach(a => {
+      const stage = KANBAN_STAGES.includes(a.stage) ? a.stage : "queued";
+      byStage[stage].push(a);
+    });
+
+    KANBAN_STAGES.forEach(stage => {
+      const col = document.createElement("div");
+      col.style = "min-width:160px;flex:1;background:var(--bg);border-radius:8px;padding:.75rem";
+      const cards = byStage[stage];
+      col.innerHTML = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem">${STAGE_LABELS[stage]} <span style="font-weight:400">(${cards.length})</span></div>`;
+      cards.forEach(app => {
+        const score = app.fit_score ? Math.round(app.fit_score * 100) : 0;
+        const scoreClass = score >= 70 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-muted";
+        const fuFlag = app.follow_up_due ? ` <span title="Follow-up: ${app.follow_up_due}" style="color:var(--amber)">⏰</span>` : "";
+        const dateStr = (app.stages_log?.[0]?.at || "").slice(0, 10);
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style = "margin-bottom:.5rem;cursor:pointer;padding:.75rem";
+        card.innerHTML = `
+          <div style="font-size:12px;font-weight:600;margin-bottom:2px">${app.company || "—"}${fuFlag}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${app.job_title || ""}</div>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            ${score > 0 ? `<span class="badge ${scoreClass}" style="font-size:10px">${score}%</span>` : ""}
+            <span style="font-size:10px;color:var(--hint)">${dateStr}</span>
+          </div>`;
+        card.onclick = () => openTrackerDrawer(app.job_id);
+        col.appendChild(card);
+      });
+      board.appendChild(col);
+    });
+
+  } catch (e) {
+    empty.textContent = "Failed to load tracker: " + e.message;
+    empty.style.display = "";
+  } finally {
+    loading.style.display = "none";
+  }
+}
+
+async function openTrackerDrawer(jobId) {
+  const app = _trackerData.find(a => a.job_id === jobId);
+  if (!app) return;
+  _drawerJobId = jobId;
+
+  document.getElementById("drawer-title").textContent = `${app.company} — ${app.job_title}`;
+
+  // Fetch files list
+  let files = [];
+  try {
+    const fr = await fetch(`/api/tracker/${jobId}/files`);
+    if (fr.ok) files = (await fr.json()).files || [];
+  } catch (e) {}
+
+  const content = document.getElementById("drawer-content");
+  const stageOptions = KANBAN_STAGES.map(s => `<option value="${s}"${s === app.stage ? " selected" : ""}>${STAGE_LABELS[s]}</option>`).join("");
+
+  content.innerHTML = `
+    <div class="field">
+      <label class="lbl">Stage</label>
+      <select id="drawer-stage" onchange="_trackerUpdateStage('${jobId}', this.value)">${stageOptions}</select>
+    </div>
+    <div class="field">
+      <label class="lbl">Follow-up date</label>
+      <input type="date" id="drawer-followup" value="${app.follow_up_due || ""}" onchange="_trackerFollowUp('${jobId}', this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius)" />
+    </div>
+    <div class="field">
+      <label class="lbl">Notes</label>
+      <textarea id="drawer-notes" rows="4" style="width:100%;padding:8px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius)"
+        onblur="_trackerUpdateNotes('${jobId}', this.value)">${app.notes || ""}</textarea>
+    </div>
+    ${app.skill_gaps?.length ? `
+    <div class="field">
+      <label class="lbl">Skill gaps</label>
+      <div class="tag-row">${app.skill_gaps.map(g => `<span class="tag gap">${g}</span>`).join("")}</div>
+    </div>` : ""}
+    ${files.length ? `
+    <div class="field">
+      <label class="lbl">Files</label>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+        ${files.filter(f => f !== "status.json").map(f => `
+          <button class="btn btn-sm btn-ghost" onclick="_viewTrackerFile('${jobId}','${f}')">${f}</button>`).join("")}
+      </div>
+    </div>` : ""}
+    <div id="drawer-file-view" style="display:none;margin-top:1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:.25rem" id="drawer-file-name"></div>
+      <pre style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:var(--radius);border:1px solid var(--border);max-height:300px;overflow-y:auto" id="drawer-file-content"></pre>
+    </div>
+  `;
+
+  document.getElementById("tracker-drawer").style.display = "";
+  document.getElementById("tracker-overlay").style.display = "";
+}
+
+function closeTrackerDrawer() {
+  document.getElementById("tracker-drawer").style.display = "none";
+  document.getElementById("tracker-overlay").style.display = "none";
+  _drawerJobId = null;
+}
+
+async function _trackerUpdateStage(jobId, stage) {
+  await fetch(`/api/tracker/${jobId}/stage`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stage })
+  });
+  const app = _trackerData.find(a => a.job_id === jobId);
+  if (app) { app.stage = stage; }
+  loadTracker();
+}
+
+async function _trackerUpdateNotes(jobId, notes) {
+  await fetch(`/api/tracker/${jobId}/notes`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes })
+  });
+}
+
+async function _trackerFollowUp(jobId, date) {
+  await fetch(`/api/tracker/${jobId}/follow_up`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ follow_up_due: date || null })
+  });
+}
+
+async function _viewTrackerFile(jobId, filename) {
+  const area = document.getElementById("drawer-file-view");
+  const nameEl = document.getElementById("drawer-file-name");
+  const contentEl = document.getElementById("drawer-file-content");
+  nameEl.textContent = filename;
+  contentEl.textContent = "Loading...";
+  area.style.display = "";
+  try {
+    const r = await fetch(`/api/tracker/${jobId}/file/${filename}`);
+    contentEl.textContent = r.ok ? await r.text() : "Failed to load file.";
+  } catch (e) {
+    contentEl.textContent = "Error: " + e.message;
   }
 }

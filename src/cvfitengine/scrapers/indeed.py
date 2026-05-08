@@ -26,19 +26,22 @@ class IndeedScraper(BaseScraper):
         query: str,
         location: str,
         max_results: int = 20,
+        days_old: int = 7,
     ) -> None:
-        super().__init__(query=query, location=location, max_results=max_results, headless=True)
+        super().__init__(query=query, location=location, max_results=max_results, headless=True, days_old=days_old)
 
     def _context_subdir(self) -> str:
         return "indeed"
 
     def _build_url(self, start: int = 0) -> str:
-        params = urllib.parse.urlencode({
+        params: dict = {
             "q": self.query,
             "l": self.location,
             "start": start,
-        })
-        return f"{self.BASE_URL}?{params}"
+        }
+        if self.days_old > 0:
+            params["fromage"] = self.days_old
+        return f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
     async def _scrape_pages(self) -> AsyncGenerator[dict, None]:
         page = await self._new_page()
