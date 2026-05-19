@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTrackPills();
   renderLiveTrackPills();
   checkHealth();
+  loadShortlistFromServer();
   // Pre-load resume YAML so scoring works without visiting Tailor tab
   fetch("/api/resume-yaml").then(r => r.ok ? r.text() : null).then(t => {
     if (t) window._resumeYamlCache = t;
@@ -171,7 +172,7 @@ async function discoverJobs(mergeMode = false) {
   const titles = (activeTrack.searchTitles || [activeTrack.label]).join(", ");
   const sys = `You are a specialist tech recruiter for AI/ML/semantic web roles in the UK. Generate 8 realistic job listings matching the candidate profile. Return ONLY valid JSON — no markdown, no preamble.
 
-Candidate: Naga Sowjanya Barla. Key credentials: First-author ESWC 2026 paper on RAG+Knowledge Graphs (arXiv:2604.02545), MSc Data Science & AI (Univ. Liverpool 2026), 13 years backend engineering (TCS), Python/Java/RDF/SPARQL/RAG/LLMs. Based in Liverpool UK.
+Candidate: Naga Sowjanya Barla. Key credentials: MSc Data Science & AI (Univ. Liverpool 2026), 13 years backend engineering (TCS), Python/Java/RDF/SPARQL/RAG/LLMs. Based in Liverpool UK.
 
 IMPORTANT: Use realistic job titles from this list for this track — these are the actual titles companies post: ${titles}. Vary them across the 8 results rather than repeating one title.
 
@@ -345,25 +346,116 @@ function _parseSalary(job) {
   return m ? parseInt(m[0].replace(/,/g,"")) : 0;
 }
 
-// ── shortlist ──────────────────────────────────────────────────
-function toggleShortlist(job, el) {
-  const idx = shortlist.findIndex(j => j.id === job.id);
-  if (idx === -1) { shortlist.push(job); el.classList.add("selected"); }
-  else { shortlist.splice(idx, 1); el.classList.remove("selected"); }
+// ── shortlist (categorical) ────────────────────────────────────
+
+const BUCKETS = [
+  { key: "dream-aligned",        label: "Dream-Aligned",        color: "#22c55e" },
+  { key: "status-unlock",        label: "Status-Unlock (KTP)",  color: "#a78bfa" },
+  { key: "sponsor-safe-bridge",  label: "Sponsor-Safe Bridge",  color: "#60a5fa" },
+  { key: "tactical-only",        label: "Tactical-Only",        color: "#f59e0b" },
+];
+
+const SPONSOR_LABELS = {
+  "licensed":     { text: "✓ Licensed sponsor", color: "#22c55e" },
+  "not_licensed": { text: "✗ Not on register",  color: "#ef4444" },
+  "unknown":      { text: "? Sponsor unknown",  color: "#f59e0b" },
+};
+
+// In-memory mirror of server state (bucket → job[])
+let categorisedShortlist = { "dream-aligned": [], "status-unlock": [], "sponsor-safe-bridge": [], "tactical-only": [] };
+
+async function toggleShortlist(job, el) {
+  const allJobs = Object.values(categorisedShortlist).flat();
+  const existing = allJobs.find(j => j.id === job.id);
+
+  if (existing) {
+    // Remove
+    const bucket = existing.bucket || "dream-aligned";
+    await fetch(`/api/shortlist/remove?job_id=${encodeURIComponent(job.id)}&bucket=${encodeURIComponent(bucket)}`, { method: "DELETE" });
+    categorisedShortlist[bucket] = categorisedShortlist[bucket].filter(j => j.id !== job.id);
+    el.classList.remove("selected");
+  } else {
+    // Show bucket picker before saving
+    const bucket = await pickBucket(job);
+    if (!bucket) return; // user cancelled
+    const sponsor_status = await checkSponsor(job.company);
+    await fetch("/api/shortlist/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job, bucket, sponsor_status }),
+    });
+    categorisedShortlist[bucket].push({ ...job, bucket, sponsor_status });
+    el.classList.add("selected");
+  }
   updateSlBadge();
+  renderShortlist();
+}
+
+async function checkSponsor(companyName) {
+  if (!companyName) return "unknown";
+  try {
+    const r = await fetch("/api/sponsor/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_name: companyName }),
+    });
+    const d = await r.json();
+    return d.sponsor_status || "unknown";
+  } catch { return "unknown"; }
+}
+
+function pickBucket(job) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center";
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--surface);border-radius:12px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.4)";
+    box.innerHTML = `
+      <div style="font-weight:600;font-size:15px;margin-bottom:4px">Save to shortlist</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px">${job.title} @ ${job.company}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Which bucket does this role belong to?</div>
+      ${BUCKETS.map(b => `
+        <button data-bucket="${b.key}" style="display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:13px">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${b.color};margin-right:8px"></span>
+          ${b.label}
+        </button>`).join("")}
+      <button id="sl-cancel" style="width:100%;padding:8px;margin-top:4px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--muted);font-size:13px">Cancel</button>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    box.querySelectorAll("[data-bucket]").forEach(btn => {
+      btn.addEventListener("click", () => { document.body.removeChild(overlay); resolve(btn.dataset.bucket); });
+    });
+    document.getElementById("sl-cancel").addEventListener("click", () => { document.body.removeChild(overlay); resolve(null); });
+  });
 }
 
 function updateSlBadge() {
+  const total = Object.values(categorisedShortlist).reduce((n, arr) => n + arr.length, 0);
   const b = document.getElementById("sl-badge");
-  if (shortlist.length) { b.textContent = shortlist.length; b.style.display = ""; }
+  if (total) { b.textContent = total; b.style.display = ""; }
   else b.style.display = "none";
+  // Keep flat shortlist in sync for tailor tab compatibility
+  shortlist = Object.values(categorisedShortlist).flat();
 }
 
-function clearShortlist() {
+async function clearShortlist() {
+  categorisedShortlist = { "dream-aligned": [], "status-unlock": [], "sponsor-safe-bridge": [], "tactical-only": [] };
   shortlist = [];
   updateSlBadge();
   renderShortlist();
   renderJobCards();
+}
+
+async function loadShortlistFromServer() {
+  try {
+    const r = await fetch("/api/shortlist");
+    const d = await r.json();
+    if (d.buckets) {
+      categorisedShortlist = d.buckets;
+      shortlist = Object.values(categorisedShortlist).flat();
+      updateSlBadge();
+    }
+  } catch { /* server not ready yet, use empty state */ }
 }
 
 function renderShortlist() {
@@ -371,25 +463,44 @@ function renderShortlist() {
   const emp = document.getElementById("sl-empty");
   const act = document.getElementById("sl-actions");
   c.innerHTML = "";
-  if (!shortlist.length) { emp.style.display = ""; act.style.display = "none"; return; }
+  const total = Object.values(categorisedShortlist).reduce((n, arr) => n + arr.length, 0);
+  if (!total) { emp.style.display = ""; act.style.display = "none"; return; }
   emp.style.display = "none"; act.style.display = "flex";
-  shortlist.forEach(job => {
-    const s = job.fit_score || 0;
-    const bc = s >= 80 ? "badge-green" : s >= 65 ? "badge-amber" : "badge-muted";
-    const d = document.createElement("div");
-    d.className = "card";
-    d.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px">
-        <div style="flex:1">
-          <div class="card-title">${job.title}</div>
-          <div class="card-sub">${job.company} · ${job.location} · ${job.salary || ""}</div>
+
+  BUCKETS.forEach(bucket => {
+    const jobs = categorisedShortlist[bucket.key] || [];
+    if (!jobs.length) return;
+
+    // Bucket header
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;gap:8px;margin:16px 0 8px";
+    header.innerHTML = `
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucket.color}"></span>
+      <span style="font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${bucket.label}</span>
+      <span style="font-size:12px;color:var(--muted)">(${jobs.length})</span>`;
+    c.appendChild(header);
+
+    jobs.forEach(job => {
+      const s = job.fit_score || 0;
+      const bc = s >= 80 ? "badge-green" : s >= 65 ? "badge-amber" : "badge-muted";
+      const sp = job.sponsor_status || "unknown";
+      const spInfo = SPONSOR_LABELS[sp] || SPONSOR_LABELS["unknown"];
+      const d = document.createElement("div");
+      d.className = "card";
+      d.innerHTML = `
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px">
+          <div style="flex:1">
+            <div class="card-title">${job.title}</div>
+            <div class="card-sub">${job.company} · ${job.location} · ${job.salary || ""}</div>
+            <div style="font-size:11px;margin-top:3px;color:${spInfo.color}">${spInfo.text}</div>
+          </div>
+          <span class="badge ${bc}">${s}% fit</span>
+          <button class="btn btn-sm btn-primary" onclick="tailorJob('${job.id}')">Tailor →</button>
         </div>
-        <span class="badge ${bc}">${s}% fit</span>
-        <button class="btn btn-sm btn-primary" onclick="tailorJob('${job.id}')">Tailor →</button>
-      </div>
-      <div style="font-size:12px;line-height:1.6;color:var(--muted)">${job.jd_summary || ""}</div>
-      <div class="tag-row">${(job.tags || []).map(t => `<span class="tag">${t}</span>`).join("")}</div>`;
-    c.appendChild(d);
+        <div style="font-size:12px;line-height:1.6;color:var(--muted)">${job.jd_summary || ""}</div>
+        <div class="tag-row">${(job.tags || []).map(t => `<span class="tag">${t}</span>`).join("")}</div>`;
+      c.appendChild(d);
+    });
   });
 }
 
@@ -463,7 +574,7 @@ async function runFitAnalysis() {
 
   try {
     const raw = await callClaude(sys,
-      `CANDIDATE:\nNaga Sowjanya Barla — AI Engineer, 13 yrs exp, MSc Data Science & AI (Liverpool 2026), ESWC 2026 first-author paper on RAG+KG, KG-RAG dissertation, Python/Java/RDF/SPARQL/RAG/LLMs, TCS backend engineering at scale.\nSkills: ${Object.values(PROFILE.skills).flat().join(", ")}\nAchievements: ${PROFILE.achievements.map(a => a.title).join("; ")}\n\nJD:\n${jd}`
+      `CANDIDATE:\nNaga Sowjanya Barla — AI Engineer, 13 yrs exp, MSc Data Science & AI (Liverpool 2026), KG-RAG dissertation, Python/Java/RDF/SPARQL/RAG/LLMs, TCS backend engineering at scale.\nSkills: ${Object.values(PROFILE.skills).flat().join(", ")}\n\nJD:\n${jd}`
     );
     const fit = parseJSON(raw);
     document.getElementById("fit-metrics").innerHTML = `
@@ -492,7 +603,9 @@ async function generateCV() {
   if (!jd) { showTailorErr("Paste a job description first."); return; }
   const variant = document.getElementById("cv-variant").value;
   const intensity = document.getElementById("tailor-intensity").value;
-  const wantCover = document.getElementById("want-cover").value === "yes";
+  const coverMode = document.getElementById("want-cover").value; // "yes" | "no" | "cover-only"
+  const wantCover = coverMode !== "no";
+  const coverOnly = coverMode === "cover-only";
   const tone = document.getElementById("cover-tone").value;
   const emph = document.getElementById("emph-notes").value;
   const role = ROLES.find(r => r.id === variant) || ROLES[0];
@@ -500,16 +613,28 @@ async function generateCV() {
 
   switchTab("output");
   document.getElementById("out-loading").style.display = "flex";
-  document.getElementById("out-msg").textContent = "Rewriting bullets and generating tailored CV...";
+  document.getElementById("out-msg").textContent = coverOnly ? "Drafting cover letter..." : "Rewriting bullets and generating tailored CV...";
   document.getElementById("out-area").style.display = "none";
   document.getElementById("out-empty").style.display = "none";
 
-  const sys = `You are an elite CV writer specialising in AI/ML/Semantic Web roles. You have this candidate's full profile.
+  try {
+    let data;
 
-CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, ESWC 2026 first-author paper, MSc Data Science & AI (Liverpool), KG-RAG dissertation, Python/Java/RDF/SPARQL.
+    if (coverOnly) {
+      const sys = `You are an expert cover letter writer for AI/ML/Semantic Web roles.
+Tone: ${tone}. Exactly 3 paragraphs. No opening "I am writing to apply". Lead with the research story.
+Return ONLY valid JSON — no markdown fences:
+{ "cover_letter": "full cover letter text", "match_score": 0-100, "key_changes": "1 sentence on why this letter fits the role" }`;
+      const raw = await callClaude(sys,
+        `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}`
+      );
+      data = parseJSON(raw);
+    } else {
+      const sys = `You are an elite CV writer specialising in AI/ML/Semantic Web roles. You have this candidate's full profile.
+
+CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, MSc Data Science & AI (Liverpool), KG-RAG dissertation, Python/Java/RDF/SPARQL.
 
 CRITICAL RULES:
-- The ESWC 2026 paper is her single biggest differentiator. It must appear prominently — in an Achievements section that comes early in the CV, or in the summary.
 - Bullets must be genuinely rewritten — not just keyword-injected. Use strong action verbs. Quantify anything quantifiable. Cut bullets that add no signal.
 - CV variant: ${role.label}. Tailor section ordering and bullet emphasis for this track.
 - Intensity: ${intensity}. ${intensity === "sharp" ? "Substantially rewrite bullets; restructure if it helps." : intensity === "moderate" ? "Strengthen and sharpen; keep structure mostly intact." : "Light touch only — minimal changes."}
@@ -527,16 +652,17 @@ Return ONLY valid JSON — no markdown fences:
   "match_score": 0-100,
   "key_changes": "2 sentence summary of what was changed and why"
 }`;
+      const raw = await callClaude(sys,
+        `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}\n\nGenerate cover letter: ${wantCover}`
+      );
+      data = parseJSON(raw);
+    }
 
-  try {
-    const raw = await callClaude(sys,
-      `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}\n\nGenerate cover letter: ${wantCover}`
-    );
-    const data = parseJSON(raw);
-    lastOutput = { data, wantCover, role, jd };
-    renderOutput(data, wantCover, role);
+    lastOutput = { data, wantCover, coverOnly, role, jd };
+    renderOutput(data, wantCover, coverOnly, role);
     document.getElementById("out-area").style.display = "block";
     document.getElementById("cover-tab-btn").style.display = wantCover ? "" : "none";
+    if (coverOnly) switchOut("cover");
   } catch (e) {
     document.getElementById("out-loading").innerHTML = `<span style="color:var(--red)">Generation failed: ${e.message}</span>`;
   } finally {
@@ -545,13 +671,19 @@ Return ONLY valid JSON — no markdown fences:
 }
 
 // ── output rendering ───────────────────────────────────────────
-function renderOutput(data, wantCover, role) {
+function renderOutput(data, wantCover, coverOnly, role) {
   const sc = data.match_score || 0;
   document.getElementById("out-metrics").innerHTML = `
     <div class="metric"><div class="metric-val">${sc}%</div><div class="metric-lbl">estimated match</div></div>
     <div class="metric" style="grid-column:span 2">
       <div style="font-size:12px;color:var(--muted);line-height:1.6;text-align:left;padding-top:4px">${data.key_changes || ""}</div>
     </div>`;
+
+  // In cover-only mode hide CV/plain/LaTeX tabs; show them otherwise
+  ["cv", "plain", "latex"].forEach(id => {
+    const btn = document.querySelector(`.out-tab[onclick="switchOut('${id}')"]`);
+    if (btn) btn.style.display = coverOnly ? "none" : "";
+  });
 
   // CV preview
   let h = `
@@ -561,12 +693,6 @@ function renderOutput(data, wantCover, role) {
       <div style="font-size:12px;color:var(--muted);margin-top:5px">${PROFILE.email} · ${PROFILE.phone} · ${PROFILE.location}</div>
       <div style="font-size:12px;color:var(--muted)">${PROFILE.linkedin} · ${PROFILE.github}</div>
     </div>`;
-
-  // Achievements always first and prominent
-  h += `<div class="cv-section">Notable Achievements</div>
-    <ul class="cv-bullets">
-      ${PROFILE.achievements.map(a => `<li><strong>${a.title}</strong><br><span style="font-size:12px;color:var(--muted)">${a.detail}</span></li>`).join("")}
-    </ul>`;
 
   if (data.summary) {
     h += `<div class="cv-section">Professional Summary</div>
@@ -626,8 +752,6 @@ function renderOutput(data, wantCover, role) {
     PROFILE.linkedin,
     ""
   ];
-  lines.push("ACHIEVEMENTS");
-  PROFILE.achievements.forEach(a => { lines.push("★ " + a.title); lines.push("  " + a.detail); });
   lines.push("");
   if (data.summary) { lines.push("SUMMARY"); lines.push(data.summary); lines.push(""); }
   (data.projects || []).forEach(p => {
@@ -677,13 +801,6 @@ function buildLatex(data, wantCover, role) {
   tex += `  {\\footnotesize\\color{muted}${esc(PROFILE.location)} $\\cdot$ ${esc(PROFILE.phone)} $\\cdot$ ${esc(PROFILE.email)}}\\par\\vspace{2pt}\n`;
   tex += `  {\\footnotesize\\color{muted}\\href{${PROFILE.linkedin}}{LinkedIn} $\\cdot$ \\href{${PROFILE.github}}{GitHub}}\n`;
   tex += `\\end{center}\n\\vspace{4pt}{\\color{navy}\\hrule height 0.8pt}\\vspace{6pt}\n\n`;
-
-  // Achievements — always first
-  tex += `\\section{Achievements}\n\\begin{itemize}\n`;
-  PROFILE.achievements.forEach(a => {
-    tex += `  \\item \\textbf{${esc(a.title)}} --- {\\small\\color{muted}${esc(a.detail)}}\n`;
-  });
-  tex += `\\end{itemize}\n\n`;
 
   // Summary
   if (data.summary) {
@@ -1101,7 +1218,7 @@ async function generateApplyCV() {
 
   const role = ROLES.find(r => activeTrack && r.id === activeTrack.id) || ROLES[0];
   const sys = `You are an elite CV writer for AI/ML/Semantic Web roles.
-CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, ESWC 2026 first-author paper on RAG+KG (arXiv:2604.02545), MSc Data Science & AI (Liverpool 2026), Python/Java/RDF/SPARQL/RAG/LLMs, TCS backend engineering.
+CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, MSc Data Science & AI (Liverpool 2026), Python/Java/RDF/SPARQL/RAG/LLMs, TCS backend engineering.
 RULES: ESWC paper must appear prominently. Rewrite bullets — do NOT just inject keywords. Quantify where possible.
 Return ONLY valid JSON (no markdown): {"headline":"","summary":"","experience":[{"id":"","role":"","co":"","dates":"","bullets":[]}],"projects":[{"id":"","title":"","bullets":[]}],"key_changes":""}`;
 
@@ -1117,9 +1234,7 @@ Return ONLY valid JSON (no markdown): {"headline":"","summary":"","experience":[
       data.headline || role.label,
       `${PROFILE.email} | ${PROFILE.phone} | ${PROFILE.location}`,
       PROFILE.linkedin, "",
-      "ACHIEVEMENTS",
     ];
-    PROFILE.achievements.forEach(a => { lines.push("★ " + a.title); lines.push("  " + a.detail); });
     lines.push("");
     if (data.summary) { lines.push("SUMMARY"); lines.push(data.summary); lines.push(""); }
     (data.projects || []).forEach(p => {
@@ -1302,12 +1417,14 @@ async function submitApply() {
   document.getElementById("apply-progress").style.display = "";
   document.getElementById("apply-progress-msg").textContent = "Queuing application...";
 
+  const _cvLatex = document.getElementById("out-latex")?.textContent || "";
+
   try {
     // Queue
     const qr = await fetch("/api/apply/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: coverLetter })
+      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: coverLetter, cv_latex: _cvLatex })
     });
     if (!qr.ok) {
       const err = await qr.json().catch(() => ({ detail: qr.statusText }));
@@ -1480,6 +1597,7 @@ async function discoverJobsWithScrape() {
   const scrapeSource = useLI && useIndeed ? "both" : useLI ? "linkedin" : "indeed";
   const query = (activeTrack.searchTitles || [activeTrack.label])[0];
   const daysOld = jobRecencyFilter === "week" ? 7 : jobRecencyFilter === "month" ? 30 : 0;
+  const maxResults = parseInt(document.getElementById("scrape-max-results")?.value || "20", 10);
 
   const progressEl = document.getElementById("scrape-progress");
   const msgEl = document.getElementById("scrape-progress-msg");
@@ -1496,7 +1614,7 @@ async function discoverJobsWithScrape() {
     const sr = await fetch("/api/jobs/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: scrapeSource, query, location: loc || "UK", max_results: 20, days_old: daysOld })
+      body: JSON.stringify({ source: scrapeSource, query, location: loc || "UK", max_results: maxResults, days_old: daysOld })
     });
     if (!sr.ok) throw new Error(await sr.text());
     const { job_id } = await sr.json();
@@ -1521,6 +1639,7 @@ async function triggerFromJD() {
   const useIndeed = document.getElementById("src-indeed")?.checked;
   const source = useLI && useIndeed ? "both" : useIndeed ? "indeed" : "linkedin";
   const daysOld = jobRecencyFilter === "week" ? 7 : jobRecencyFilter === "month" ? 30 : 0;
+  const maxResults = parseInt(document.getElementById("scrape-max-results")?.value || "20", 10);
 
   msg.textContent = "Extracting role from JD...";
 
@@ -1528,7 +1647,7 @@ async function triggerFromJD() {
     const r = await fetch("/api/jd/trigger", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jd_text: jd, location: loc, source, days_old: daysOld, max_results: 20 })
+      body: JSON.stringify({ jd_text: jd, location: loc, source, days_old: daysOld, max_results: maxResults })
     });
     if (!r.ok) throw new Error(await r.text());
     const { scrape_job_id, extracted_title } = await r.json();
@@ -1561,17 +1680,19 @@ async function confirmApplyWithCL() {
   document.getElementById("apply-status-badge").style.display = "";
   document.getElementById("apply-status-badge").textContent = "Queuing application...";
 
+  const _cvLatex2 = document.getElementById("out-latex")?.textContent || "";
+
   try {
     if (method === "manual") {
       const job = discoveredJobs.find(j => j.id === applyPanelJobId);
       const url = job?.url || job?.apply_url || "";
       if (url) window.open(url, "_blank", "noopener");
       document.getElementById("apply-status-badge").textContent = "Link opened — apply manually.";
-      // Save folder with edited cover letter
+      // Save folder with edited cover letter and tailored CV
       await fetch("/api/apply/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL })
+        body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL, cv_latex: _cvLatex2 })
       });
       return;
     }
@@ -1579,7 +1700,7 @@ async function confirmApplyWithCL() {
     const qr = await fetch("/api/apply/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL })
+      body: JSON.stringify({ job_id: applyPanelJobId, method, cover_letter: editedCL, cv_latex: _cvLatex2 })
     });
     if (!qr.ok) {
       const err = await qr.json().catch(() => ({ detail: qr.statusText }));
@@ -1746,6 +1867,15 @@ async function loadTracker() {
   } finally {
     loading.style.display = "none";
   }
+}
+
+function filterTracker() {
+  const q = (document.getElementById("tracker-search")?.value || "").toLowerCase().trim();
+  document.querySelectorAll("#kanban-board .card").forEach(card => {
+    const company = card.querySelector("div:first-child")?.textContent.toLowerCase() || "";
+    const role = card.querySelector("div:nth-child(2)")?.textContent.toLowerCase() || "";
+    card.style.display = (!q || company.includes(q) || role.includes(q)) ? "" : "none";
+  });
 }
 
 async function openTrackerDrawer(jobId) {

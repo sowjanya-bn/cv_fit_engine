@@ -68,46 +68,14 @@ async def apply_easy(
 
     try:
         await page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
-        await asyncio.sleep(2)
 
-        # Click Easy Apply button
-        ea_btn = await page.query_selector(
-            ".jobs-apply-button--top-card button, "
-            "button[aria-label*='Easy Apply'], "
-            ".jobs-apply-button"
-        )
-        if not ea_btn:
-            screenshot_path = await _screenshot(page, job_id, "no_easy_apply")
-            await context.close()
-            await pw.stop()
-            return {
-                "status": "failed",
-                "screenshot_path": screenshot_path,
-                "error": "Easy Apply button not found",
-            }
-
-        await ea_btn.click()
-        await asyncio.sleep(1.5)
-
-        # Fill the wizard pages (phone, name, etc.)
-        person = resume.profile.person
-        await _fill_wizard_pages(
-            page=page,
-            resume=resume,
-            person=person,
-            cover_letter=cover_letter,
-            cv_pdf_path=cv_pdf_path,
-        )
-
-        # Take screenshot BEFORE the final submit button
-        screenshot_path = await _screenshot(page, job_id, "pre_submit")
-
-        # Store page in pending sessions so confirm_apply() can find it
+        # Browser stays open — user applies manually.
+        # Store session so it can be closed later via confirm_apply().
         _pending_sessions[job_id] = {"page": page, "context": context, "pw": pw}
 
         return {
             "status": "awaiting_confirm",
-            "screenshot_path": screenshot_path,
+            "screenshot_path": "",
             "error": None,
         }
 
@@ -136,32 +104,20 @@ async def confirm_apply(job_id: str) -> dict:
     pw = session["pw"]
 
     try:
-        # Click the Submit / Review application button
-        submit_btn = await page.query_selector(
-            "button[aria-label*='Submit application'], "
-            "button[aria-label*='Review your application'], "
-            "footer button[data-easy-apply-next-button]"
-        )
-        if submit_btn:
-            await submit_btn.click()
-            await asyncio.sleep(2)
-
-        screenshot_path = await _screenshot(page, job_id, "submitted")
         del _pending_sessions[job_id]
+    except KeyError:
+        pass
 
-        return {
-            "status": "applied",
-            "screenshot_path": screenshot_path,
-            "error": None,
-        }
-    except Exception as e:
-        return {"status": "failed", "screenshot_path": "", "error": str(e)}
-    finally:
-        try:
-            await context.close()
-            await pw.stop()
-        except Exception:
-            pass
+    try:
+        await context.close()
+    except Exception:
+        pass
+    try:
+        await pw.stop()
+    except Exception:
+        pass
+
+    return {"status": "applied", "screenshot_path": "", "error": None}
 
 
 # ── wizard helpers ─────────────────────────────────────────────────

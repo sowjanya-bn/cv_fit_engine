@@ -25,13 +25,6 @@ const PROFILE = {
     }
   ],
 
-  achievements: [
-    {
-      title: "First-author paper accepted at ESWC 2026",
-      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference, arXiv:2604.02545"
-    }
-  ],
-
   skills: {
     "Languages":   ["Python", "Java", "SQL"],
     "Frameworks":  ["Spring Boot", "Spring WebFlux", "FastAPI", "Apache Camel", "MuleSoft"],
@@ -125,7 +118,8 @@ const PROFILE = {
         "Built and curated 20K+ triple RDF knowledge graph using Music Meta and Schema.org ontologies.",
         "Implemented KG-RAG, Hybrid RAG and Graph RAG retrieval strategies with comparative evaluation.",
         "Developed Python orchestration and evaluation pipelines assessing grounding accuracy, coverage, and coherence.",
-        "Analysed retrieval-quality vs generation-performance trade-offs to inform system design and optimisation."
+        "Analysed retrieval-quality vs generation-performance trade-offs to inform system design and optimisation.",
+        "Published research paper accepted at ESWC 2026 (https://doi.org/10.1007/978-3-032-25156-5_25), demonstrating novel insights into KG-RAG design and evaluation. "
       ],
       tags: ["rag", "kg", "llm", "python", "rdf", "sparql", "evaluation", "research"]
     },
@@ -146,7 +140,7 @@ const ROLES = [
     id: "kg",
     label: "Knowledge Graph / Semantic AI Engineer",
     fit: 95,
-    pitch: "Your strongest and most differentiated position. ESWC 2026 first-author paper + KG-RAG dissertation + RDF/SPARQL expertise + production engineering is exceptionally rare. Very few engineers have this combination. Low supply, rising demand.",
+    pitch: "Your strongest and most differentiated position. KG-RAG dissertation + RDF/SPARQL expertise + production engineering is exceptionally rare. Very few engineers have this combination. Low supply, rising demand.",
     companies: "Ontotext, Stardog, Elsevier, BBC R&D, NHS Digital, Wolfram, Semantic Web Company, Pool Party, Cambridge Semantics, Eccenca, Metaphacts, data.world, cultural heritage tech orgs",
     keySkills: ["RDF", "SPARQL", "Knowledge Graphs", "RAG", "Ontology Modelling", "LLMs", "Python", "Graph Databases"],
 
@@ -165,9 +159,6 @@ const ROLES = [
       "Data Knowledge Engineer",
       "RDF Engineer",
     ],
-
-    // What to paste into "additional context" for best results
-    additionalContext: `Seeking Knowledge Graph or Semantic AI roles where RDF, SPARQL, and ontology design are core to the work — not just a nice-to-have. I have a first-author paper accepted at ESWC 2026 on controlled RAG architectures for knowledge graphs, and an MSc dissertation building a 20K+ triple RDF knowledge graph with multiple RAG retrieval strategies. I am not a pure backend engineer trying to move into AI — I have published research in this specific domain. Open to roles in cultural heritage, publishing, life sciences, enterprise knowledge management, or any domain that takes knowledge representation seriously. Strong Python. Production engineering background means I can build and deploy, not just prototype.`,
 
     fitClass: "badge-green",
     fitLabel: "Strongest fit"
@@ -199,8 +190,6 @@ const ROLES = [
       "Retrieval Engineer",
       "AI Platform Engineer",
     ],
-
-    additionalContext: `Looking for roles where RAG, LLMs, and production AI systems are the core of the work. I have a first-author publication at ESWC 2026 on controlled RAG architectures, an MSc dissertation implementing multiple RAG retrieval strategies over a knowledge graph. I bring something unusual: rigorous evaluation methodology from research experience combined with 13 years of production engineering — I know how to build AI systems that are reliable, not just demos. Particularly interested in roles where grounding, factual accuracy, and evaluation matter (not just "prompt and hope"). Python-first. Open to early-stage startups or established teams building serious AI products.`,
 
     fitClass: "badge-green",
     fitLabel: "Strong fit"
@@ -290,9 +279,6 @@ const ROLES = [
       "Computational Linguist",
       "AI Research Scientist",
     ],
-
-    additionalContext: `Applied AI researcher with a first-author paper accepted at ESWC 2026 ('Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling', arXiv:2604.02545) and an MSc dissertation on knowledge-graph-backed RAG systems. I sit at the intersection of knowledge representation, retrieval-augmented generation, and evaluation — a combination that is practically rare in industry. My research is applied by design: I build and measure systems, not just theorise. 13 years of production engineering means I can take a research idea to deployment. Looking for roles in industry R&D or applied science teams where the work leads to published output or shipped systems — ideally both. Especially interested in NLP, information retrieval, knowledge-intensive NLP, and grounded generation.`,
-
     fitClass: "badge-green",
     fitLabel: "Strong fit — industry / applied"
   }

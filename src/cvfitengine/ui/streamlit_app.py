@@ -121,9 +121,8 @@ with st.sidebar:
     weights = profiles.get(role_key, profiles.get("default", {}))
     exp_w = float(weights.get("experience", 1.0))
     proj_w = float(weights.get("projects", 1.0))
-    ach_w = float(weights.get("achievements", 1.0))
 
-st.caption(f"Section weights: experience {exp_w}, projects {proj_w}, achievements {ach_w}")
+st.caption(f"Section weights: experience {exp_w}, projects {proj_w}")
 
 col_left, col_right = st.columns([1, 1], gap="large")
 

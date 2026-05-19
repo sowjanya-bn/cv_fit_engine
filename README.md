@@ -69,7 +69,6 @@ Edit `public/profile.js` — it's plain JavaScript with your full resume structu
 - `PROFILE.experience[]` — each role with bullets and tags
 - `PROFILE.projects[]` — projects with bullets
 - `PROFILE.skills{}` — skill categories
-- `PROFILE.achievements[]` — headline achievements
 - `PROFILE.education[]` — degrees
 - `ROLES[]` — the 5 target tracks with fit scores and strategy text
 

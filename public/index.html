@@ -258,7 +258,6 @@
           13 yrs exp · Liverpool, UK · MSc Data Science &amp; AI (University of Liverpool, 2026)
         </div>
         <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
-          <span class="badge badge-green">First-author ESWC 2026</span>
           <span class="badge badge-navy">KG-RAG Dissertation</span>
           <span class="badge badge-muted">Java · Python · RDF/SPARQL · RAG · LLMs</span>
         </div>
@@ -347,6 +346,9 @@
         <div class="panel-sub" style="margin-bottom:0">Track your pipeline from applied to offer.</div>
       </div>
       <button class="btn btn-sm" onclick="loadTracker()">Refresh</button>
+    </div>
+    <div style="margin-bottom:.75rem">
+      <input type="text" id="tracker-search" placeholder="Search company or role..." oninput="filterTracker()" style="width:100%;max-width:340px;padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px" />
     </div>
     <div id="tracker-stats" style="display:flex;gap:1.5rem;margin-bottom:1rem;font-size:12px;color:var(--muted)"></div>
     <div id="tracker-loading" class="loading-row" style="display:none"><div class="spinner"></div><span>Loading...</span></div>
@@ -541,6 +543,10 @@
           <input type="checkbox" id="src-indeed" /> Indeed
         </label>
         <span style="font-size:11px;color:var(--hint)">(scraping takes 2-5 min per source)</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-left:8px">
+          Max jobs
+          <input type="number" id="scrape-max-results" value="20" min="1" max="100" style="width:60px;padding:2px 6px;font-size:13px;border:1px solid var(--border);border-radius:4px" />
+        </label>
       </div>
     </div>
 
@@ -634,6 +640,7 @@
         <label class="lbl">Cover letter</label>
         <select id="want-cover">
           <option value="yes">Yes — include cover letter</option>
+          <option value="cover-only">Cover letter only</option>
           <option value="no">No</option>
         </select>
       </div>
@@ -649,7 +656,7 @@
 
     <div class="field">
       <label class="lbl">Emphasis notes</label>
-      <input type="text" id="emph-notes" value="Emphasise ESWC 2026 paper prominently; lead with KG-RAG research; TCS shows scale but don't let it dominate; quantify wherever possible" />
+      <input type="text" id="emph-notes" value="lead with KG-RAG research; TCS shows scale but don't let it dominate; quantify wherever possible" />
     </div>
 
     <div id="tailor-err" class="alert alert-err" style="display:none"></div>

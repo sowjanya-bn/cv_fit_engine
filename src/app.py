@@ -548,7 +548,13 @@ def _save_application_folder(job: dict, cover_letter: str, jd_text: str = "", cv
         (folder / "cover_letter.txt").write_text(cover_letter, encoding="utf-8")
 
     if cv_latex:
-        (folder / "cv_tailored.tex").write_text(cv_latex, encoding="utf-8")
+        tex_path = folder / "cv_tailored.tex"
+        tex_path.write_text(cv_latex, encoding="utf-8")
+        try:
+            from cvfitengine.rendering.pdf import compile_latex_to_pdf
+            compile_latex_to_pdf(tex_path)
+        except Exception:
+            pass  # PDF compile is best-effort; .tex is always saved
 
     status_path = folder / "status.json"
     if not status_path.exists():
@@ -748,6 +754,81 @@ async def health():
         "anthropic": bool(env("ANTHROPIC_API_KEY")),
         "reed": bool(env("REED_API_KEY")),
         "adzuna": bool(env("ADZUNA_APP_ID")) and bool(env("ADZUNA_APP_KEY")),
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# Sponsor Check
+# ══════════════════════════════════════════════════════════════
+
+class SponsorCheckRequest(BaseModel):
+    company_name: str
+
+@app.post("/api/sponsor/check")
+async def check_sponsor(req: SponsorCheckRequest):
+    """
+    Check whether a company is on the UK licensed sponsor register.
+    Returns: licensed | not_licensed | unknown
+    Note: 'licensed' means they have permission to sponsor — not that
+    they are actively doing so. Always verify via job ad or recruiter.
+    """
+    from cvfitengine.sponsor_checker import is_licensed_sponsor, sponsor_status_label
+    status = is_licensed_sponsor(req.company_name)
+    return {
+        "company_name": req.company_name,
+        "sponsor_status": status,
+        "label": sponsor_status_label(status),
+    }
+
+@app.post("/api/sponsor/invalidate-cache")
+async def invalidate_sponsor_cache():
+    """Force a fresh download of the sponsor register on next check."""
+    from cvfitengine.sponsor_checker import invalidate_cache
+    invalidate_cache()
+    return {"status": "cache invalidated"}
+
+
+# ══════════════════════════════════════════════════════════════
+# Shortlist — categorical persistence
+# ══════════════════════════════════════════════════════════════
+
+SHORTLIST_BUCKETS = ["dream-aligned", "status-unlock", "sponsor-safe-bridge", "tactical-only"]
+_shortlist_store: dict[str, list] = {b: [] for b in SHORTLIST_BUCKETS}
+
+class ShortlistSaveRequest(BaseModel):
+    job: dict
+    bucket: str  # one of SHORTLIST_BUCKETS
+    sponsor_status: str = "unknown"  # licensed | not_licensed | unknown
+
+@app.post("/api/shortlist/save")
+async def shortlist_save(req: ShortlistSaveRequest):
+    if req.bucket not in SHORTLIST_BUCKETS:
+        return {"error": f"Unknown bucket '{req.bucket}'. Must be one of {SHORTLIST_BUCKETS}"}
+    job = {**req.job, "sponsor_status": req.sponsor_status, "bucket": req.bucket}
+    bucket = _shortlist_store[req.bucket]
+    # Deduplicate by job id
+    existing = next((i for i, j in enumerate(bucket) if j.get("id") == job.get("id")), None)
+    if existing is not None:
+        bucket[existing] = job  # update in place
+    else:
+        bucket.append(job)
+    return {"status": "saved", "bucket": req.bucket, "total": len(bucket)}
+
+@app.delete("/api/shortlist/remove")
+async def shortlist_remove(job_id: str, bucket: str):
+    if bucket not in SHORTLIST_BUCKETS:
+        return {"error": f"Unknown bucket '{bucket}'"}
+    before = len(_shortlist_store[bucket])
+    _shortlist_store[bucket] = [j for j in _shortlist_store[bucket] if j.get("id") != job_id]
+    removed = before - len(_shortlist_store[bucket])
+    return {"status": "removed" if removed else "not_found", "bucket": bucket}
+
+@app.get("/api/shortlist")
+async def shortlist_get():
+    """Return all shortlisted jobs organised by bucket."""
+    return {
+        "buckets": _shortlist_store,
+        "total": sum(len(v) for v in _shortlist_store.values()),
     }
 
 

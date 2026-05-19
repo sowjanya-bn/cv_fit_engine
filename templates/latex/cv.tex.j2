@@ -99,6 +99,27 @@
 {% endif %}
 
 % =====================
+% SKILLS (full-width, after Profile)
+% =====================
+{% if skills %}
+\section*{Skills}
+
+{% if skills is mapping %}
+  {% for k, v in skills.items() %}
+  \textbf{ {{ k }} }: {% if v is string %}{{ v }}{% else %}{{ v | join(", ") }}{% endif %}\par\vspace{2pt}
+  {% endfor %}
+{% else %}
+  {% for s in skills %}
+    {% if s is mapping %}
+\textbf{ {{ s.get("name","") }} }: {{ (s.get("items", [])) | join(", ") }}\par\vspace{2pt}
+    {% else %}
+\textbf{ {{ s.name }} }: {{ s.items | join(", ") }}\par\vspace{2pt}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% endif %}
+
+% =====================
 % TWO COLUMNS
 % =====================
 \begin{paracol}{2}
@@ -166,35 +187,6 @@
   left=3mm,right=3mm,top=2.5mm,bottom=2.5mm,
   enhanced
 ]
-
-% SKILLS
-{% if skills %}
-\section*{Skills}
-
-{# Case 1: skills is a dict like {"Languages": [...], "Tools": [...]} #}
-{% if skills is mapping %}
-  {% for k, v in skills.items() %}
-  \textbf{ {{ k }} }\par
-  {% if v is string %}
-    {{ v }}\par\vspace{3pt}
-  {% else %}
-    {{ v | join(", ") }}\par\vspace{3pt}
-  {% endif %}
-  {% endfor %}
-
-{# Case 2: skills is a list of objects/dicts like [{"name":..., "items":[...]}] #}
-{% else %}
-  {% for s in skills %}
-    {% if s is mapping %}
-      \textbf{ {{ s.get("name","") }} }\par
-      {{ (s.get("items", [])) | join(", ") }}\par\vspace{3pt}
-    {% else %}
-      \textbf{ {{ s.name }} }\par
-      {{ s.items | join(", ") }}\par\vspace{3pt}
-    {% endif %}
-  {% endfor %}
-{% endif %}
-{% endif %}
 
 % EDUCATION
 {% if education %}

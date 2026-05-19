@@ -128,10 +128,6 @@ blocks:
       text: Built secure gateway services with access control for regulated environments.
       kind: impact
       metrics: []
-    - id: b_0005
-      text: Supported data-driven and AI-adjacent initiatives through Python prototyping.
-      kind: impact
-      metrics: []
     tags:
       skills: [distributed-systems, api-design, backend-development, data-pipelines]
       tools: [java, python]
@@ -161,10 +157,6 @@ blocks:
     - id: b_0004
       text: Worked with large operational datasets, focusing on accuracy, consistency,
         and reliability of data used in production systems.
-      kind: impact
-      metrics: []
-    - id: b_0005
-      text: Ensured compliance with security and regulatory standards.
       kind: impact
       metrics: []
     tags:
@@ -220,63 +212,6 @@ blocks:
       tools: [java]
       domain: [telecom, enterprise]
       seniority: [early-career]
-  projects:
-  - id: proj_001
-    title: 'MSc Dissertation: Knowledge Graph RAG System'
-    context: ''
-    links: []
-    start: ''
-    end: ''
-    bullets:
-    - id: b_0001
-      text: Designed and implemented an end-to-end knowledge-graph-first RAG pipeline
-        for personalised narrative generation.
-      kind: technical
-      metrics: []
-    - id: b_0002
-      text: Built and curated a 20K+ triple RDF knowledge graph using Music Meta and
-        Schema.org vocabularies.
-      kind: technical
-      metrics: []
-    - id: b_0003
-      text: Implemented multiple retrieval strategies including KG-RAG, Hybrid RAG
-        and Graph RAG.
-      kind: technical
-      metrics: []
-    - id: b_0004
-      text: Developed Python-based orchestration and evaluation pipelines to assess
-        grounding accuracy, coverage and coherence.\\[4pt]
-      kind: technical
-      metrics: []
-    tags:
-      skills: [rag, knowledge-graphs, llm, evaluation, orchestration, graph-modeling]
-      tools: [python, rdf, sparql]
-      domain: [research, cultural-heritage]
-  - id: proj_002
-    title: Pre-market and After-hours Stock Price Analysis
-    context: ''
-    links: []
-    start: ''
-    end: ''
-    bullets:
-    - id: b_0001
-      text: Constructed event-window datasets aligned to quarterly earnings announcements.
-      kind: technical
-      metrics: []
-    - id: b_0002
-      text: Engineered features from OHLCV data, EPS surprises and structured news
-        sentiment.
-      kind: technical
-      metrics: []
-    - id: b_0003
-      text: Benchmarked ML models including XGBoost, achieving approximately 80\%
-        accuracy, and analysed drivers using SHAP.\\[4pt]
-      kind: technical
-      metrics: []
-    tags:
-      skills: [machine-learning, feature-engineering, model-evaluation, financial-analysis]
-      tools: [python, xgboost, shap]
-      domain: [finance]
   education:
   - id: edu_001
     degree: MSc Data Science and Artificial Intelligence
@@ -296,30 +231,18 @@ blocks:
     grade: ''
     modules: []
     notes: ''
-  achievements:
-    - id: ach_001
-      title: Paper accepted at ESWC 2026
-      date: 2026
-      evidence: European Semantic Web Conference (ESWC)
-      notes: >
-        First-author research paper titled
-        "Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling"
-        accepted to ESWC 2026.
-      tags:
-        skills: [knowledge-graphs, rag, semantic-web, research]
-        tools: [rdf, sparql]
-        domain: [research, semantic-web]
 
 
 
   publications:
-  - id: pub_000
-    title: ''
-    venue: ''
-    year: ''
-    authors: ''
-    links: []
-    notes: ''
+  - id: pub_001
+    title: "Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling"
+    venue: European Semantic Web Conference (ESWC 2026)
+    year: '2026'
+    authors: Naga Sowjanya Barla
+    links:
+      - https://doi.org/10.1007/978-3-032-25156-5_25
+    notes: Published by Springer.
 variants:
   _help: Optional. Define role-specific versions without editing the base blocks.
   summary_by_role:

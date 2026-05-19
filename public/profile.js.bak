@@ -25,13 +25,6 @@ const PROFILE = {
     }
   ],
 
-  achievements: [
-    {
-      title: "First-author paper accepted at ESWC 2026",
-      detail: "'Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling' — European Semantic Web Conference, arXiv:2604.02545"
-    }
-  ],
-
   skills: {
     "Languages":   ["Python", "Java", "SQL"],
     "Frameworks":  ["Spring Boot", "Spring WebFlux", "FastAPI", "Apache Camel", "MuleSoft"],
@@ -146,7 +139,7 @@ const ROLES = [
     id: "kg",
     label: "Knowledge Graph / Semantic AI Engineer",
     fit: 95,
-    pitch: "Your strongest and most differentiated position. ESWC 2026 first-author paper + KG-RAG dissertation + RDF/SPARQL expertise + production engineering is exceptionally rare. Very few engineers have this combination. Low supply, rising demand.",
+    pitch: "Your strongest and most differentiated position. KG-RAG dissertation + RDF/SPARQL expertise + production engineering is exceptionally rare. Very few engineers have this combination. Low supply, rising demand.",
     companies: "Ontotext, Stardog, Elsevier, BBC R&D, NHS Digital, Alan Turing Institute affiliates, Wolfram, Semantic Web Company, cultural heritage tech",
     keySkills: ["RDF", "SPARQL", "Knowledge Graphs", "RAG", "Ontology", "LLMs", "Python"],
     fitClass: "badge-green",
