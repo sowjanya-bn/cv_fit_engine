@@ -18,7 +18,7 @@ from pathlib import Path
 SHEET_HEADERS = [
     "id", "date_applied", "company", "job_title", "job_url", "location",
     "contract_type", "inside_ir35", "day_rate_or_salary", "source",
-    "recruiter_name", "recruiter_contact", "cv_variant", "status",
+    "recruiter_name", "recruiter_contact", "cv_variant", "cv_latex", "status",
     "stage_detail", "next_action", "next_action_date", "jd_text", "notes",
     "outcome", "offer_amount", "visa_sponsorship_needed", "last_updated",
 ]

@@ -1380,6 +1380,52 @@ async def parse_job_url(req: ParseUrlRequest):
     return {"fields": fields}
 
 
+def _tex_to_plain(tex: str) -> str:
+    """Convert LaTeX source to readable plain text."""
+    import re
+    # Drop preamble (everything up to \begin{document})
+    doc_match = re.search(r"\\begin\{document\}", tex)
+    if doc_match:
+        tex = tex[doc_match.end():]
+    tex = tex.replace(r"\end{document}", "")
+
+    # Sections → uppercase headings
+    tex = re.sub(r"\\section\{([^}]+)\}", lambda m: f"\n{m.group(1).upper()}\n{'─'*40}", tex)
+
+    # fontsize{N}{N}\selectfont — drop the size args, keep following content
+    tex = re.sub(r"\\fontsize\{[^}]+\}\{[^}]+\}\\selectfont\s*", "", tex)
+
+    # Common text commands — unwrap the argument
+    tex = re.sub(r"\\textbf\{([^}]*)\}", r"\1", tex)
+    tex = re.sub(r"\\textit\{([^}]*)\}", r"\1", tex)
+    tex = re.sub(r"\\emph\{([^}]*)\}", r"\1", tex)
+    tex = re.sub(r"\\href\{[^}]+\}\{([^}]+)\}", r"\1", tex)
+    tex = re.sub(r"\\(?:small|footnotesize|normalfont|bfseries|color)\{[^}]*\}", "", tex)
+    tex = re.sub(r"\\\w+(?:\[[^\]]*\])?\{[^}]*\}", "", tex)  # remaining commands with args
+
+    # Environments
+    tex = re.sub(r"\\begin\{itemize\}|\\end\{itemize\}", "", tex)
+    tex = re.sub(r"\\begin\{center\}|\\end\{center\}", "", tex)
+    tex = re.sub(r"\\item\s*", "• ", tex)
+
+    # Spacing / layout commands
+    tex = re.sub(r"\\(?:vspace|hspace|par|noindent|hfill|hrule|newline|\\)\b[^a-zA-Z]?[^\n]*", " ", tex)
+    tex = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])*\s*", " ", tex)  # any remaining commands
+
+    # Punctuation cleanup
+    tex = tex.replace("---", "–").replace("--", "–").replace("``", '"').replace("''", '"')
+    tex = tex.replace(r"\$", "$").replace("$\\cdot$", "·").replace("$", "")
+    tex = tex.replace("%", "")
+
+    # Strip leftover bare braces
+    tex = re.sub(r"[{}]", "", tex)
+
+    # Collapse whitespace
+    tex = re.sub(r"[ \t]+", " ", tex)
+    tex = re.sub(r"\n{3,}", "\n\n", tex)
+    return tex.strip()
+
+
 def _save_cv_latex_file(app_id: str, filename: str, latex: str) -> None:
     """Save a CV .tex file into a per-app subfolder under APPLICATIONS_DIR/cv_latex/."""
     dest = APPLICATIONS_DIR / "cv_latex" / app_id
@@ -1442,12 +1488,10 @@ async def list_applications():
 async def create_application(body: ApplicationBody):
     from src.sheets import SheetsNotConfigured, add_application
     data = body.model_dump()
-    cv_latex = data.pop("cv_latex", "") or ""
+    if data.get("cv_latex"):
+        data["cv_latex"] = _tex_to_plain(data["cv_latex"])
     try:
         row_id = add_application(data)
-        # Even when using Sheets, save the .tex file locally so it's retrievable
-        if cv_latex and data.get("cv_variant"):
-            _save_cv_latex_file(row_id, data.get("cv_variant", "cv.tex"), cv_latex)
         return {"ok": True, "id": row_id, "source": "sheets"}
     except SheetsNotConfigured:
         # Save as local folder
@@ -1461,9 +1505,6 @@ async def create_application(body: ApplicationBody):
         folder.mkdir(parents=True, exist_ok=True)
         if data.get("jd_text"):
             (folder / "job_description.txt").write_text(data["jd_text"], encoding="utf-8")
-        if cv_latex:
-            fname = data.get("cv_variant") or "cv_tailored.tex"
-            (folder / fname).write_text(cv_latex, encoding="utf-8")
         status = {
             "job_id": row_id,
             "company": data.get("company", ""),
