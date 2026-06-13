@@ -8,3 +8,5 @@ EOF
 ~/.cvfit/
 # Local env
 .env
+# Google service account key — never commit this
+credentials.json

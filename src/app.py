@@ -624,6 +624,75 @@ async def gen_cover_letter(req: CoverLetterRequest):
     }
 
 
+class TailoringPlanRequest(BaseModel):
+    job_id: str
+    jd_text: str
+    resume_yaml: str
+    company: str = ""
+    plans_dir: str = "plans/"
+
+
+@app.post("/api/plan/generate")
+async def generate_tailoring_plan(req: TailoringPlanRequest):
+    from cvfitengine.planning.tailoring_plan import generate_plan
+
+    try:
+        resume = _load_resume_from_yaml(req.resume_yaml)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid resume YAML: {e}")
+
+    plan = generate_plan(
+        req.jd_text,
+        resume,
+        job_id=req.job_id,
+        jd_company=req.company,
+    )
+    json_path, md_path = plan.save(req.plans_dir)
+
+    return {
+        "job_id": plan.job_id,
+        "approval_status": plan.approval_status,
+        "jd_category": plan.jd_category,
+        "jd_seniority": plan.jd_seniority,
+        "raw_fit_score": plan.raw_fit_score,
+        "adjusted_fit_score": plan.adjusted_fit_score,
+        "coverage_pct": plan.coverage_pct,
+        "missing_skills": plan.missing_skills,
+        "missing_tools": plan.missing_tools,
+        "role_reading": plan.role_reading,
+        "positioning_strategy": plan.positioning_strategy,
+        "tailoring_aggression": plan.tailoring_aggression,
+        "tailoring_aggression_reason": plan.tailoring_aggression_reason,
+        "layout_mode": plan.layout_mode,
+        "section_order": plan.section_order,
+        "title_strategy": plan.title_strategy.__dict__ if plan.title_strategy else None,
+        "selected_headline_id": plan.selected_headline_id,
+        "selected_summary_id": plan.selected_summary_id,
+        "block_recommendations": [r.__dict__ for r in plan.block_recommendations],
+        "bullet_audit": [b.__dict__ for b in plan.bullet_audit],
+        "forbidden_claims": plan.forbidden_claims,
+        "review_questions": plan.review_questions,
+        "plan_json_path": str(json_path),
+        "plan_md_path": str(md_path),
+    }
+
+
+@app.post("/api/plan/approve")
+async def approve_tailoring_plan(job_id: str, plans_dir: str = "plans/"):
+    import json as _json
+    from pathlib import Path
+
+    slug = job_id.replace("/", "_").replace(" ", "_")
+    plan_file = Path(plans_dir) / f"tailoring_plan_{slug}.json"
+    if not plan_file.exists():
+        raise HTTPException(status_code=404, detail=f"No plan found for job_id '{job_id}'")
+
+    data = _json.loads(plan_file.read_text(encoding="utf-8"))
+    data["approval_status"] = "approved"
+    plan_file.write_text(_json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"job_id": job_id, "approval_status": "approved"}
+
+
 @app.post("/api/apply/queue")
 async def queue_apply(req: QueueApplyRequest):
     from cvfitengine.scrapers.cache import JobCache
@@ -935,6 +1004,551 @@ async def tracker_get_file(job_id: str, filename: str):
     if not fpath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return Response(content=fpath.read_text(encoding="utf-8"), media_type="text/plain")
+
+
+# ══════════════════════════════════════════════════════════════
+# Alignment — Phases 1-4
+# ══════════════════════════════════════════════════════════════
+from dataclasses import asdict
+from typing import Any
+
+def _req_to_dict(r) -> dict:
+    return {"rank": r.rank, "text": r.text, "importance": r.importance,
+            "evidence_state": r.evidence_state, "cv_evidence": r.cv_evidence}
+
+def _bullet_to_dict(b) -> dict:
+    return {"original": b.original, "rewritten": b.rewritten,
+            "evidence_state": b.evidence_state, "flag": b.flag}
+
+def _blocked_to_dict(b) -> dict:
+    return {"original": b.original, "reason": b.reason, "detail": b.detail}
+
+def _score_to_dict(s) -> dict:
+    return {"keyword_match": s.keyword_match, "skills_match": s.skills_match,
+            "outcome_alignment": s.outcome_alignment, "role_fit": s.role_fit,
+            "seniority_fit": s.seniority_fit, "recruiter_readability": s.recruiter_readability,
+            "overall": s.overall, "missing_high_priority": s.missing_high_priority,
+            "safe_edits": s.safe_edits, "evidence_needed": s.evidence_needed}
+
+def _verdict_to_dict(v) -> dict:
+    return {"would_interview": v.would_interview, "reason": v.reason,
+            "biggest_doubt": v.biggest_doubt, "fix": v.fix}
+
+def _req_from_dict(d: dict):
+    from cvfitengine.core.models import Requirement
+    return Requirement(rank=d["rank"], text=d["text"], importance=d["importance"],
+                       evidence_state=d["evidence_state"], cv_evidence=d.get("cv_evidence"))
+
+def _bullet_from_dict(d: dict):
+    from cvfitengine.core.models import RewrittenBullet
+    return RewrittenBullet(original=d["original"], rewritten=d["rewritten"],
+                           evidence_state=d["evidence_state"], flag=d.get("flag"))
+
+def _blocked_from_dict(d: dict):
+    from cvfitengine.core.models import BlockedRewrite
+    return BlockedRewrite(original=d["original"], reason=d["reason"], detail=d.get("detail", ""))
+
+def _alignment_map_from_dict(d: dict):
+    from cvfitengine.core.models import AlignmentMap, FitScore, HiringManagerVerdict
+    s = d["score"]
+    v = d["verdict"]
+    return AlignmentMap(
+        requirements=[_req_from_dict(r) for r in d.get("requirements", [])],
+        clarifying_questions=d.get("clarifying_questions", []),
+        rewritten_bullets=[_bullet_from_dict(b) for b in d.get("rewritten_bullets", [])],
+        blocked_rewrites=[_blocked_from_dict(b) for b in d.get("blocked_rewrites", [])],
+        score=FitScore(
+            keyword_match=s["keyword_match"], skills_match=s["skills_match"],
+            outcome_alignment=s["outcome_alignment"], role_fit=s["role_fit"],
+            seniority_fit=s["seniority_fit"], recruiter_readability=s["recruiter_readability"],
+            overall=s["overall"], missing_high_priority=s.get("missing_high_priority", []),
+            safe_edits=s.get("safe_edits", []), evidence_needed=s.get("evidence_needed", []),
+        ),
+        verdict=HiringManagerVerdict(
+            would_interview=v["would_interview"], reason=v["reason"],
+            biggest_doubt=v["biggest_doubt"], fix=v["fix"],
+        ),
+    )
+
+
+class ExtractRequest(BaseModel):
+    cv_text: str
+    jd_text: str
+
+@app.post("/api/align/extract")
+async def align_extract(req: ExtractRequest):
+    from cvfitengine.alignment.extractor import extract_requirements
+    try:
+        requirements = extract_requirements(req.cv_text, req.jd_text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"requirements": [_req_to_dict(r) for r in requirements]}
+
+
+class RewriteRequest(BaseModel):
+    cv_text: str
+    requirements: list[dict]
+    clarifications: dict = {}
+
+@app.post("/api/align/rewrite")
+async def align_rewrite(req: RewriteRequest):
+    from cvfitengine.alignment.rewriter import generate_clarifying_questions, rewrite_bullets
+    requirements = [_req_from_dict(d) for d in req.requirements]
+    try:
+        questions = generate_clarifying_questions(requirements, req.cv_text)
+        bullets, blocked = rewrite_bullets(req.cv_text, requirements, req.clarifications)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "clarifying_questions": questions,
+        "rewritten_bullets": [_bullet_to_dict(b) for b in bullets],
+        "blocked_rewrites": [_blocked_to_dict(b) for b in blocked],
+    }
+
+
+class ScoreRequest(BaseModel):
+    cv_text: str
+    jd_text: str
+    requirements: list[dict]
+    rewritten_bullets: list[dict] = []
+
+@app.post("/api/align/score")
+async def align_score(req: ScoreRequest):
+    from cvfitengine.alignment.scorer import score_alignment
+    requirements = [_req_from_dict(d) for d in req.requirements]
+    bullets = [_bullet_from_dict(d) for d in req.rewritten_bullets]
+    try:
+        score = score_alignment(req.cv_text, req.jd_text, requirements, bullets)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return _score_to_dict(score)
+
+
+class TailorAlignRequest(BaseModel):
+    cv_text: str
+    jd_text: str
+    alignment_map: dict
+    confirmed_evidence: dict = {}
+
+@app.post("/api/align/tailor")
+async def align_tailor(req: TailorAlignRequest):
+    from cvfitengine.alignment.tailor import generate_tailored_cv
+    try:
+        alignment_map = _alignment_map_from_dict(req.alignment_map)
+        tailored_cv, change_log, omitted_gaps = generate_tailored_cv(
+            req.cv_text, alignment_map, req.confirmed_evidence
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"tailored_cv": tailored_cv, "change_log": change_log, "omitted_gaps": omitted_gaps}
+
+
+class FullAlignRequest(BaseModel):
+    cv_text: str
+    jd_text: str
+    clarifications: dict = {}
+
+@app.post("/api/align/full")
+async def align_full(req: FullAlignRequest):
+    from cvfitengine.alignment.extractor import extract_requirements
+    from cvfitengine.alignment.rewriter import generate_clarifying_questions, rewrite_bullets
+    from cvfitengine.alignment.scorer import score_alignment
+    from cvfitengine.alignment.reviewer import generate_verdict
+    try:
+        requirements = extract_requirements(req.cv_text, req.jd_text)
+        questions = generate_clarifying_questions(requirements, req.cv_text)
+        bullets, blocked = rewrite_bullets(req.cv_text, requirements, req.clarifications)
+        score = score_alignment(req.cv_text, req.jd_text, requirements, bullets)
+        verdict = generate_verdict(req.cv_text, req.jd_text, score, requirements)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "alignment_map": {
+            "requirements": [_req_to_dict(r) for r in requirements],
+            "clarifying_questions": questions,
+            "rewritten_bullets": [_bullet_to_dict(b) for b in bullets],
+            "blocked_rewrites": [_blocked_to_dict(b) for b in blocked],
+            "score": _score_to_dict(score),
+            "verdict": _verdict_to_dict(verdict),
+        }
+    }
+
+
+class ParseUrlRequest(BaseModel):
+    url: str
+
+
+async def _fetch_page_text(url: str) -> str:
+    """Fetch page text. Tries httpx first; falls back to Playwright for JS-heavy pages."""
+    import re
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+    }
+    html = None
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            html = resp.text
+            # Indeed and other JS-heavy sites return a shell — detect and skip
+            if len(html) < 3000 or _is_shell_page(html):
+                html = None
+    except Exception:
+        html = None
+
+    if html:
+        return _extract_main_content(html)
+
+    # Playwright fallback for JS-rendered pages
+    from playwright.async_api import async_playwright
+    from cvfitengine.scrapers.base import BROWSER_CONTEXT_DIR
+    BROWSER_CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
+
+    CONTENT_SELECTORS = [
+        "#jobDescriptionText",
+        ".jobsearch-jobDescriptionText",
+        "[class*='job-description']",
+        "[class*='jobDescription']",
+        "[id*='job-description']",
+        "[id*='jobDescription']",
+        "article",
+        "main",
+        "[role='main']",
+    ]
+    # One combined CSS selector — browser picks whichever appears first
+    ANY_CONTENT = ", ".join(CONTENT_SELECTORS)
+
+    async with async_playwright() as pw:
+        ctx = await pw.chromium.launch_persistent_context(
+            user_data_dir=str(BROWSER_CONTEXT_DIR / "parse_url"),
+            headless=True,
+        )
+        page = await ctx.new_page()
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            # Wait up to 5s for any content element — single combined wait, not a loop
+            try:
+                await page.wait_for_selector(ANY_CONTENT, timeout=5000)
+            except Exception:
+                pass  # Fall through to full body
+
+            title = await page.title()
+
+            # Grab the first matching content block
+            for sel in CONTENT_SELECTORS:
+                try:
+                    el = page.locator(sel).first
+                    text = (await el.inner_text(timeout=2000)).strip()
+                    if len(text) > 200:
+                        return f"{title}\n\n{text}"
+                except Exception:
+                    continue
+
+            return f"{title}\n\n{await page.inner_text('body')}"
+        finally:
+            await ctx.close()
+
+
+def _is_shell_page(html: str) -> bool:
+    """True if the HTML looks like a JS shell with no real content."""
+    import re
+    # Strip tags and check text density
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    # Very low text-to-HTML ratio = JS shell
+    return len(text) < 500 or (len(text) / max(len(html), 1)) < 0.04
+
+
+def _extract_main_content(html: str) -> str:
+    """Extract the most content-rich section from HTML before stripping tags."""
+    import re
+
+    def strip_tags(h: str) -> str:
+        h = re.sub(r"<(script|style|nav|header|footer)[^>]*>.*?</\1>", " ", h, flags=re.DOTALL | re.IGNORECASE)
+        h = re.sub(r"<(br|p|div|li|h[1-6]|tr)[^>]*>", "\n", h, flags=re.IGNORECASE)
+        h = re.sub(r"<[^>]+>", " ", h)
+        for ent, ch in [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&nbsp;", " "), ("&#39;", "'"), ("&quot;", '"')]:
+            h = h.replace(ent, ch)
+        h = re.sub(r"[ \t]+", " ", h)
+        h = re.sub(r"\n{3,}", "\n\n", h)
+        return h.strip()
+
+    # Try semantic / job-specific containers in order
+    PATTERNS = [
+        r'<article[^>]*>(.*?)</article>',
+        r'<main[^>]*>(.*?)</main>',
+        r'<[^>]+id=["\'][^"\']*job.?desc[^"\']*["\'][^>]*>(.*?)</',
+        r'<[^>]+class=["\'][^"\']*job.?desc[^"\']*["\'][^>]*>(.*?)</',
+        r'<[^>]+role=["\']main["\'][^>]*>(.*?)</',
+    ]
+    for pat in PATTERNS:
+        m = re.search(pat, html, re.DOTALL | re.IGNORECASE)
+        if m:
+            candidate = strip_tags(m.group(1))
+            if len(candidate) > 300:
+                return candidate
+
+    return strip_tags(html)
+
+
+def _detect_source_from_url(url: str) -> str:
+    from urllib.parse import urlparse
+    host = urlparse(url).hostname or ""
+    if "linkedin.com" in host:   return "LinkedIn"
+    if "reed.co.uk" in host:     return "Reed"
+    if "adzuna" in host:         return "Adzuna"
+    if "indeed.com" in host:     return "Indeed"
+    if "totaljobs.com" in host:  return "TotalJobs"
+    if "cwjobs.co.uk" in host:   return "CWJobs"
+    if "glassdoor.com" in host:  return "Glassdoor"
+    return "Direct"
+
+
+class ParseTextRequest(BaseModel):
+    text: str
+
+
+async def _extract_fields_with_claude(api_key: str, text: str) -> dict:
+    import json as _json, re as _re
+    excerpt = text[:12000]
+    prompt = f"""Extract job posting details from this text. Return ONLY a JSON object with these keys (empty string if not found):
+- company
+- job_title
+- location  (city/region, e.g. "Manchester" or "Remote" or "London, Hybrid")
+- salary  (as stated, e.g. "£65,000-£75,000" or "£500-£600/day")
+- contract_type  (one of: Permanent, Contract, FTC)
+- jd_text  (the full job description body verbatim)
+
+Text:
+{excerpt}
+
+Respond with only the JSON object."""
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 2048,
+                "system": "You extract structured job posting data. Return only valid JSON.",
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        )
+    resp.raise_for_status()
+    raw = resp.json()["content"][0]["text"].strip()
+    raw = _re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
+    return _json.loads(raw)
+
+
+@app.post("/api/applications/parse-text")
+async def parse_job_text(req: ParseTextRequest):
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="No text provided")
+    api_key = env("ANTHROPIC_API_KEY", required=True)
+    try:
+        fields = await _extract_fields_with_claude(api_key, req.text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Extraction failed: {e}")
+    return {"fields": fields}
+
+
+@app.post("/api/applications/parse-url")
+async def parse_job_url(req: ParseUrlRequest):
+    api_key = env("ANTHROPIC_API_KEY", required=True)
+    source = _detect_source_from_url(req.url)
+
+    try:
+        page_text = await asyncio.wait_for(_fetch_page_text(req.url), timeout=35.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=422, detail="Page fetch timed out after 35s — try pasting the JD manually")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not fetch page: {e}")
+
+    try:
+        fields = await _extract_fields_with_claude(api_key, page_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Extraction failed: {e}")
+
+    fields["source"] = source
+    return {"fields": fields}
+
+
+def _save_cv_latex_file(app_id: str, filename: str, latex: str) -> None:
+    """Save a CV .tex file into a per-app subfolder under APPLICATIONS_DIR/cv_latex/."""
+    dest = APPLICATIONS_DIR / "cv_latex" / app_id
+    dest.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(filename).name or "cv.tex"
+    (dest / safe_name).write_text(latex, encoding="utf-8")
+
+
+# ══════════════════════════════════════════════════════════════
+# Application Tracker — Google Sheets-backed routes
+# ══════════════════════════════════════════════════════════════
+
+class ApplicationBody(BaseModel):
+    id: Optional[str] = None
+    date_applied: Optional[str] = None
+    company: str = ""
+    job_title: str = ""
+    job_url: str = ""
+    location: str = ""
+    contract_type: str = "Permanent"
+    inside_ir35: str = ""
+    day_rate_or_salary: str = ""
+    source: str = ""
+    recruiter_name: str = ""
+    recruiter_contact: str = ""
+    cv_variant: str = ""
+    cv_latex: str = ""   # raw LaTeX content — stored as a file, not in the sheet
+    status: str = "applied"
+    stage_detail: str = ""
+    next_action: str = ""
+    next_action_date: str = ""
+    jd_text: str = ""
+    notes: str = ""
+    outcome: str = "Pending"
+    offer_amount: str = ""
+    visa_sponsorship_needed: str = ""
+
+
+@app.get("/api/applications")
+async def list_applications():
+    from src.sheets import SheetsNotConfigured, get_all_applications
+    try:
+        apps = get_all_applications()
+        return {"applications": apps, "source": "sheets"}
+    except SheetsNotConfigured:
+        # Fall back to local file tracker
+        if not APPLICATIONS_DIR.exists():
+            return {"applications": [], "source": "local"}
+        apps = []
+        for folder in sorted(APPLICATIONS_DIR.iterdir()):
+            if not folder.is_dir():
+                continue
+            s = _load_status(folder)
+            if s:
+                apps.append(s)
+        return {"applications": apps, "source": "local"}
+
+
+@app.post("/api/applications")
+async def create_application(body: ApplicationBody):
+    from src.sheets import SheetsNotConfigured, add_application
+    data = body.model_dump()
+    cv_latex = data.pop("cv_latex", "") or ""
+    try:
+        row_id = add_application(data)
+        # Even when using Sheets, save the .tex file locally so it's retrievable
+        if cv_latex and data.get("cv_variant"):
+            _save_cv_latex_file(row_id, data.get("cv_variant", "cv.tex"), cv_latex)
+        return {"ok": True, "id": row_id, "source": "sheets"}
+    except SheetsNotConfigured:
+        # Save as local folder
+        import json as _json
+        from datetime import datetime as _dt2
+        row_id = data.get("id") or str(uuid.uuid4())
+        date_str = data.get("date_applied") or _dt2.utcnow().strftime("%Y-%m-%d")
+        company = _slugify(data.get("company", "unknown"))
+        title = _slugify(data.get("job_title", "role"))
+        folder = APPLICATIONS_DIR / f"{date_str}_{company}_{title}"
+        folder.mkdir(parents=True, exist_ok=True)
+        if data.get("jd_text"):
+            (folder / "job_description.txt").write_text(data["jd_text"], encoding="utf-8")
+        if cv_latex:
+            fname = data.get("cv_variant") or "cv_tailored.tex"
+            (folder / fname).write_text(cv_latex, encoding="utf-8")
+        status = {
+            "job_id": row_id,
+            "company": data.get("company", ""),
+            "job_title": data.get("job_title", ""),
+            "source": data.get("source", ""),
+            "apply_url": data.get("job_url", ""),
+            "stage": data.get("status", "applied"),
+            "stages_log": [{"stage": data.get("status", "applied"), "at": _dt2.utcnow().isoformat()}],
+            "notes": data.get("notes", ""),
+            "follow_up_due": data.get("next_action_date") or None,
+            "fit_score": 0,
+            "skill_gaps": [],
+            **{k: v for k, v in data.items() if k not in ("jd_text",)},
+        }
+        (folder / "status.json").write_text(_json.dumps(status, indent=2), encoding="utf-8")
+        return {"ok": True, "id": row_id, "source": "local"}
+
+
+@app.put("/api/applications/{app_id}")
+async def update_application_route(app_id: str, body: dict):
+    from src.sheets import SheetsNotConfigured, update_application
+    try:
+        ok = update_application(app_id, body)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Application not found in sheet")
+        return {"ok": True}
+    except SheetsNotConfigured:
+        folder = _find_app_folder(app_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Application not found")
+        s = _load_status(folder)
+        s.update(body)
+        _save_status(folder, s)
+        return {"ok": True}
+
+
+@app.post("/api/applications/{app_id}/archive")
+async def archive_application_route(app_id: str):
+    from src.sheets import SheetsNotConfigured, archive_application
+    try:
+        ok = archive_application(app_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Application not found in sheet")
+        return {"ok": True}
+    except SheetsNotConfigured:
+        # Move local folder to an _archived subfolder
+        folder = _find_app_folder(app_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Application not found")
+        archive_dir = APPLICATIONS_DIR / "_archive"
+        archive_dir.mkdir(exist_ok=True)
+        import shutil
+        shutil.move(str(folder), str(archive_dir / folder.name))
+        return {"ok": True}
+
+
+@app.get("/api/applications/stats")
+async def application_stats():
+    from src.sheets import SheetsNotConfigured, get_stats
+    try:
+        return get_stats()
+    except SheetsNotConfigured:
+        if not APPLICATIONS_DIR.exists():
+            return {"total": 0, "active": 0, "interviews": 0, "offers": 0,
+                    "response_rate": 0, "avg_days_to_response": 0}
+        apps = []
+        for folder in sorted(APPLICATIONS_DIR.iterdir()):
+            if not folder.is_dir() or folder.name == "_archive":
+                continue
+            s = _load_status(folder)
+            if s:
+                apps.append(s)
+        active_statuses = {"applied", "cv_sent", "interview_1", "interview_2", "final_round"}
+        active = [a for a in apps if a.get("stage", a.get("status", "")) in active_statuses]
+        interviews = [a for a in apps if a.get("stage", a.get("status", "")) in {"interview_1", "interview_2", "final_round"}]
+        offers = [a for a in apps if a.get("stage", a.get("status", "")) == "offer"]
+        response_rate = round(len(interviews) / len(active) * 100) if active else 0
+        return {
+            "total": len(apps),
+            "active": len(active),
+            "interviews": len(interviews),
+            "offers": len(offers),
+            "response_rate": response_rate,
+            "avg_days_to_response": 0,
+        }
 
 
 # ══════════════════════════════════════════════════════════════

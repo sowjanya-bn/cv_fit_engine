@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── tab routing ────────────────────────────────────────────────
 function switchTab(t) {
-  const tabs = ["strategy", "live", "discover", "shortlist", "tailor", "output", "applications", "settings"];
+  const tabs = ["strategy", "live", "discover", "shortlist", "tailor", "output", "applications", "settings", "fitanalysis"];
   tabs.forEach(k => {
     document.getElementById("panel-" + k).classList.toggle("active", k === t);
     document.getElementById("nav-" + k).classList.toggle("active", k === t);
@@ -34,6 +34,7 @@ function switchTab(t) {
   if (t === "shortlist") renderShortlist();
   if (t === "tailor") populateTailorSelect();
   if (t === "applications") loadTracker();
+  if (t === "fitanalysis") _prefillFACv();
   if (t === "output" && !lastOutput) {
     document.getElementById("out-empty").style.display = "";
     document.getElementById("out-area").style.display = "none";
@@ -632,7 +633,7 @@ Return ONLY valid JSON — no markdown fences:
     } else {
       const sys = `You are an elite CV writer specialising in AI/ML/Semantic Web roles. You have this candidate's full profile.
 
-CANDIDATE: Naga Sowjanya Barla — AI Engineer, 13 yrs exp, MSc Data Science & AI (Liverpool), KG-RAG dissertation, Python/Java/RDF/SPARQL.
+CANDIDATE: Naga Sowjanya Barla — AI Research Engineer (University of Liverpool, Apr 2026–present) + Research Intern (2025) + 13 yrs production backend (TCS). MSc Data Science & AI (Distinction, Liverpool). Published ESWC 2026. KG-RAG, LLM orchestration, SPARQL, RDF, Python, Java, Spring Boot.
 
 CRITICAL RULES:
 - Bullets must be genuinely rewritten — not just keyword-injected. Use strong action verbs. Quantify anything quantifiable. Cut bullets that add no signal.
@@ -877,6 +878,7 @@ function copyText(id) {
 
 function downloadLatex() {
   const text = document.getElementById("out-latex").textContent;
+  if (!text || text.length < 20) { alert("No LaTeX content to download — generate a CV first."); return; }
   const blob = new Blob([text], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1782,10 +1784,19 @@ async function downloadPDF() {
 }
 
 // ── Tracker / Kanban ───────────────────────────────────────────
-const KANBAN_STAGES = ["queued", "applied", "interview", "offer", "rejected", "withdrawn"];
-const STAGE_LABELS = { queued: "Queued", applied: "Applied", interview: "Interview", offer: "Offer", rejected: "Rejected", withdrawn: "Withdrawn" };
+const KANBAN_STAGES = ["applied", "cv_sent", "interview_1", "interview_2", "final_round", "offer", "rejected", "ghost", "withdrawn"];
+const STAGE_LABELS = {
+  applied: "Applied", cv_sent: "CV Sent", interview_1: "1st Interview",
+  interview_2: "2nd Interview", final_round: "Final Round", offer: "Offer",
+  rejected: "Rejected", ghost: "Ghost", withdrawn: "Withdrawn",
+  // legacy aliases
+  queued: "Queued", interview: "Interview"
+};
+// Stages shown as active pipeline (non-terminal)
+const ACTIVE_STAGES = new Set(["applied", "cv_sent", "interview_1", "interview_2", "final_round"]);
 let _trackerData = [];
 let _drawerJobId = null;
+let _trackerSource = "local"; // "sheets" or "local"
 
 async function loadTracker() {
   const loading = document.getElementById("tracker-loading");
@@ -1798,9 +1809,18 @@ async function loadTracker() {
   board.innerHTML = "";
 
   try {
-    const r = await fetch("/api/tracker/list");
-    const d = await r.json();
+    // Try new sheets-backed endpoint first, fall back to legacy
+    let d;
+    try {
+      const r = await fetch("/api/applications");
+      d = r.ok ? await r.json() : null;
+    } catch (_) { d = null; }
+    if (!d) {
+      const r = await fetch("/api/tracker/list");
+      d = await r.json();
+    }
     _trackerData = d.applications || [];
+    _trackerSource = d.source || "local";
 
     if (!_trackerData.length) {
       empty.style.display = "";
@@ -1811,51 +1831,60 @@ async function loadTracker() {
     // Stats bar
     const total = _trackerData.length;
     const now = new Date();
-    const weekAgo = new Date(now - 7 * 86400000);
-    const thisWeek = _trackerData.filter(a => new Date((a.stages_log?.[0]?.at || "")) >= weekAgo).length;
-    const interviews = _trackerData.filter(a => a.stage === "interview" || a.stage === "offer").length;
-    const applied = _trackerData.filter(a => a.stage !== "queued").length;
-    const responseRate = applied > 0 ? Math.round((interviews / applied) * 100) : 0;
+    const activeApps = _trackerData.filter(a => ACTIVE_STAGES.has(_appStage(a)));
+    const interviews = _trackerData.filter(a => ["interview_1","interview_2","final_round","interview"].includes(_appStage(a)));
+    const offers = _trackerData.filter(a => _appStage(a) === "offer");
+    const responseRate = activeApps.length > 0 ? Math.round((interviews.length / total) * 100) : 0;
     const avgFit = _trackerData.length
-      ? Math.round(_trackerData.reduce((s, a) => s + (a.fit_score || 0) * 100, 0) / _trackerData.length)
+      ? Math.round(_trackerData.reduce((s, a) => s + (parseFloat(a.fit_score) || 0) * 100, 0) / _trackerData.length)
       : 0;
 
     stats.innerHTML = `
-      <span>Total: <strong>${total}</strong></span>
-      <span>This week: <strong>${thisWeek}</strong></span>
+      <span>Active: <strong>${activeApps.length}</strong></span>
+      <span>Interviews: <strong>${interviews.length}</strong></span>
+      <span>Offers: <strong>${offers.length}</strong></span>
       <span>Response rate: <strong>${responseRate}%</strong></span>
-      <span>Avg fit: <strong>${avgFit}%</strong></span>
+      ${avgFit > 0 ? `<span>Avg fit: <strong>${avgFit}%</strong></span>` : ""}
     `;
 
-    // Build Kanban columns
+    // Build Kanban columns — only show stages that have cards, plus active pipeline stages
     const byStage = {};
     KANBAN_STAGES.forEach(s => { byStage[s] = []; });
     _trackerData.forEach(a => {
-      const stage = KANBAN_STAGES.includes(a.stage) ? a.stage : "queued";
-      byStage[stage].push(a);
+      const stage = _appStage(a);
+      const key = KANBAN_STAGES.includes(stage) ? stage : "applied";
+      (byStage[key] = byStage[key] || []).push(a);
     });
 
-    KANBAN_STAGES.forEach(stage => {
+    const stagesToShow = KANBAN_STAGES.filter(s => byStage[s]?.length > 0 || ACTIVE_STAGES.has(s));
+
+    stagesToShow.forEach(stage => {
       const col = document.createElement("div");
       col.style = "min-width:160px;flex:1;background:var(--bg);border-radius:8px;padding:.75rem";
-      const cards = byStage[stage];
-      col.innerHTML = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem">${STAGE_LABELS[stage]} <span style="font-weight:400">(${cards.length})</span></div>`;
+      const cards = byStage[stage] || [];
+      col.innerHTML = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem">${STAGE_LABELS[stage] || stage} <span style="font-weight:400">(${cards.length})</span></div>`;
       cards.forEach(app => {
-        const score = app.fit_score ? Math.round(app.fit_score * 100) : 0;
+        const score = app.fit_score ? Math.round(parseFloat(app.fit_score) * 100) : 0;
         const scoreClass = score >= 70 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-muted";
-        const fuFlag = app.follow_up_due ? ` <span title="Follow-up: ${app.follow_up_due}" style="color:var(--amber)">⏰</span>` : "";
-        const dateStr = (app.stages_log?.[0]?.at || "").slice(0, 10);
+        const appId = app.id || app.job_id || "";
+        const nextDate = app.next_action_date || app.follow_up_due || "";
+        const isStale = _isStale(app);
+        const staleFlag = isStale ? ` <span title="Needs attention" style="color:#d97706">●</span>` : "";
+        const dateStr = (app.date_applied || (app.stages_log?.[0]?.at || "")).slice(0, 10);
         const card = document.createElement("div");
         card.className = "card";
-        card.style = "margin-bottom:.5rem;cursor:pointer;padding:.75rem";
+        card.dataset.company = (app.company || "").toLowerCase();
+        card.dataset.role = (app.job_title || "").toLowerCase();
+        card.style = `margin-bottom:.5rem;cursor:pointer;padding:.75rem${isStale ? ";border-left:3px solid #d97706" : ""}`;
         card.innerHTML = `
-          <div style="font-size:12px;font-weight:600;margin-bottom:2px">${app.company || "—"}${fuFlag}</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${app.job_title || ""}</div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:2px">${_esc(app.company || "—")}${staleFlag}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${_esc(app.job_title || "")}</div>
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
             ${score > 0 ? `<span class="badge ${scoreClass}" style="font-size:10px">${score}%</span>` : ""}
             <span style="font-size:10px;color:var(--hint)">${dateStr}</span>
+            ${nextDate ? `<span style="font-size:10px;color:var(--amber)">→ ${nextDate}</span>` : ""}
           </div>`;
-        card.onclick = () => openTrackerDrawer(app.job_id);
+        card.onclick = () => openTrackerDrawer(appId);
         col.appendChild(card);
       });
       board.appendChild(col);
@@ -1869,57 +1898,143 @@ async function loadTracker() {
   }
 }
 
+function _appStage(a) {
+  return a.status || a.stage || "applied";
+}
+
+function _isStale(a) {
+  const now = new Date();
+  const nextDate = a.next_action_date || a.follow_up_due;
+  if (nextDate) {
+    try { if (new Date(nextDate) < now) return true; } catch (_) {}
+  }
+  const lastUpdated = a.last_updated || (a.stages_log?.slice(-1)[0]?.at);
+  if (lastUpdated && ACTIVE_STAGES.has(_appStage(a))) {
+    try {
+      const d = new Date(lastUpdated);
+      return (now - d) > 7 * 86400000;
+    } catch (_) {}
+  }
+  return false;
+}
+
+function _esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
 function filterTracker() {
   const q = (document.getElementById("tracker-search")?.value || "").toLowerCase().trim();
   document.querySelectorAll("#kanban-board .card").forEach(card => {
-    const company = card.querySelector("div:first-child")?.textContent.toLowerCase() || "";
-    const role = card.querySelector("div:nth-child(2)")?.textContent.toLowerCase() || "";
+    const company = card.dataset.company || "";
+    const role = card.dataset.role || "";
     card.style.display = (!q || company.includes(q) || role.includes(q)) ? "" : "none";
   });
 }
 
-async function openTrackerDrawer(jobId) {
-  const app = _trackerData.find(a => a.job_id === jobId);
+async function openTrackerDrawer(appId) {
+  const app = _trackerData.find(a => (a.id || a.job_id) === appId);
   if (!app) return;
-  _drawerJobId = jobId;
+  _drawerJobId = appId;
 
-  document.getElementById("drawer-title").textContent = `${app.company} — ${app.job_title}`;
+  document.getElementById("drawer-title").textContent = `${app.company || "—"} — ${app.job_title || ""}`;
 
-  // Fetch files list
+  // Try to fetch files (local tracker)
   let files = [];
   try {
+    const jobId = app.job_id || appId;
     const fr = await fetch(`/api/tracker/${jobId}/files`);
     if (fr.ok) files = (await fr.json()).files || [];
-  } catch (e) {}
+  } catch (_) {}
 
   const content = document.getElementById("drawer-content");
-  const stageOptions = KANBAN_STAGES.map(s => `<option value="${s}"${s === app.stage ? " selected" : ""}>${STAGE_LABELS[s]}</option>`).join("");
+  const curStage = _appStage(app);
+  const stageOptions = KANBAN_STAGES.map(s =>
+    `<option value="${s}"${s === curStage ? " selected" : ""}>${STAGE_LABELS[s] || s}</option>`
+  ).join("");
+
+  const jdText = app.jd_text || "";
+  const hasJD = jdText.trim().length > 0;
 
   content.innerHTML = `
     <div class="field">
-      <label class="lbl">Stage</label>
-      <select id="drawer-stage" onchange="_trackerUpdateStage('${jobId}', this.value)">${stageOptions}</select>
+      <label class="lbl">Status</label>
+      <select id="drawer-stage" onchange="_trackerUpdateField('${appId}', 'status', this.value)">${stageOptions}</select>
     </div>
     <div class="field">
-      <label class="lbl">Follow-up date</label>
-      <input type="date" id="drawer-followup" value="${app.follow_up_due || ""}" onchange="_trackerFollowUp('${jobId}', this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius)" />
+      <label class="lbl">Stage detail</label>
+      <input type="text" id="drawer-stage-detail" value="${_esc(app.stage_detail || "")}"
+        onblur="_trackerUpdateField('${appId}', 'stage_detail', this.value)"
+        placeholder="e.g. 1st stage booked 14 Jun" style="font-size:12px" />
     </div>
-    <div class="field">
-      <label class="lbl">Notes</label>
-      <textarea id="drawer-notes" rows="4" style="width:100%;padding:8px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius)"
-        onblur="_trackerUpdateNotes('${jobId}', this.value)">${app.notes || ""}</textarea>
+    <div class="grid2">
+      <div class="field">
+        <label class="lbl">Next action</label>
+        <input type="text" id="drawer-next-action" value="${_esc(app.next_action || "")}"
+          onblur="_trackerUpdateField('${appId}', 'next_action', this.value)"
+          placeholder="e.g. Await feedback" style="font-size:12px" />
+      </div>
+      <div class="field">
+        <label class="lbl">By date</label>
+        <input type="date" id="drawer-next-date" value="${app.next_action_date || app.follow_up_due || ""}"
+          onchange="_trackerUpdateField('${appId}', 'next_action_date', this.value)"
+          style="font-size:12px" />
+      </div>
     </div>
-    ${app.skill_gaps?.length ? `
-    <div class="field">
-      <label class="lbl">Skill gaps</label>
-      <div class="tag-row">${app.skill_gaps.map(g => `<span class="tag gap">${g}</span>`).join("")}</div>
+    <div class="grid2">
+      <div class="field">
+        <label class="lbl">Outcome</label>
+        <select id="drawer-outcome" onchange="_trackerUpdateField('${appId}', 'outcome', this.value)">
+          ${["Pending","Offer","Rejected","Withdrawn","Ghost"].map(o =>
+            `<option${o === (app.outcome || "Pending") ? " selected" : ""}>${o}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Offer amount</label>
+        <input type="text" value="${_esc(app.offer_amount || "")}"
+          onblur="_trackerUpdateField('${appId}', 'offer_amount', this.value)"
+          placeholder="e.g. £65k" style="font-size:12px" />
+      </div>
+    </div>
+
+    ${app.location || app.day_rate_or_salary || app.source ? `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem;line-height:1.8">
+      ${app.location ? `<span>📍 ${_esc(app.location)}</span>&nbsp;&nbsp;` : ""}
+      ${app.day_rate_or_salary ? `<span>💷 ${_esc(app.day_rate_or_salary)}</span>&nbsp;&nbsp;` : ""}
+      ${app.source ? `<span>🔗 ${_esc(app.source)}</span>` : ""}
+      ${app.recruiter_name ? `&nbsp;&nbsp;<span>👤 ${_esc(app.recruiter_name)}</span>` : ""}
     </div>` : ""}
-    ${files.length ? `
+
     <div class="field">
+      <label class="lbl">Notes / Interview prep</label>
+      <textarea id="drawer-notes" rows="5" style="width:100%;padding:8px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius);line-height:1.6"
+        placeholder="Append notes as you progress..."
+        onblur="_trackerUpdateField('${appId}', 'notes', this.value)">${_esc(app.notes || "")}</textarea>
+    </div>
+
+    ${hasJD ? `
+    <div class="field">
+      <label class="lbl">Job Description</label>
+      <div style="max-height:200px;overflow-y:auto;font-size:11px;line-height:1.6;white-space:pre-wrap;background:var(--bg);padding:.75rem;border-radius:var(--radius);border:1px solid var(--border)">${_esc(jdText)}</div>
+    </div>` : ""}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem">
+      ${hasJD ? `<button class="btn btn-primary btn-sm" onclick="_prepWithClaude('${appId}')">Prep with Claude →</button>` : ""}
+      ${app.job_url || app.apply_url ? `<a href="${_esc(app.job_url || app.apply_url)}" target="_blank" rel="noopener" class="btn btn-sm">View posting ↗</a>` : ""}
+      <button class="btn btn-sm btn-danger" onclick="_archiveApplication('${appId}')">Archive</button>
+    </div>
+
+    ${app.skill_gaps?.length ? `
+    <div class="field" style="margin-top:.75rem">
+      <label class="lbl">Skill gaps</label>
+      <div class="tag-row">${app.skill_gaps.map(g => `<span class="tag gap">${_esc(g)}</span>`).join("")}</div>
+    </div>` : ""}
+
+    ${files.length ? `
+    <div class="field" style="margin-top:.75rem">
       <label class="lbl">Files</label>
       <div style="display:flex;flex-wrap:wrap;gap:.5rem">
         ${files.filter(f => f !== "status.json").map(f => `
-          <button class="btn btn-sm btn-ghost" onclick="_viewTrackerFile('${jobId}','${f}')">${f}</button>`).join("")}
+          <button class="btn btn-sm btn-ghost" onclick="_viewTrackerFile('${app.job_id || appId}','${f}')">${_esc(f)}</button>`).join("")}
       </div>
     </div>` : ""}
     <div id="drawer-file-view" style="display:none;margin-top:1rem">
@@ -1932,37 +2047,381 @@ async function openTrackerDrawer(jobId) {
   document.getElementById("tracker-overlay").style.display = "";
 }
 
+function _prepWithClaude(appId) {
+  const app = _trackerData.find(a => (a.id || a.job_id) === appId);
+  if (!app) return;
+  // Switch to Tailor tab and pre-fill JD
+  document.getElementById("jd-ta").value = app.jd_text || "";
+  // Set context banner
+  const label = document.getElementById("tailor-role-label");
+  if (label) {
+    label.textContent = `Interview prep mode — ${app.company} · ${app.job_title} · ${STAGE_LABELS[_appStage(app)] || _appStage(app)}`;
+    label.style.color = "var(--teal)";
+    label.style.fontWeight = "600";
+  }
+  closeTrackerDrawer();
+  switchTab("tailor");
+}
+
+async function _archiveApplication(appId) {
+  if (!confirm("Move this application to archive?")) return;
+  const endpoint = _trackerSource === "sheets"
+    ? `/api/applications/${appId}/archive`
+    : `/api/tracker/${appId}/stage`;
+  const body = _trackerSource === "sheets"
+    ? {}
+    : { stage: "withdrawn" };
+  try {
+    await fetch(endpoint, {
+      method: _trackerSource === "sheets" ? "POST" : "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    closeTrackerDrawer();
+    loadTracker();
+  } catch (e) {
+    alert("Archive failed: " + e.message);
+  }
+}
+
 function closeTrackerDrawer() {
   document.getElementById("tracker-drawer").style.display = "none";
   document.getElementById("tracker-overlay").style.display = "none";
   _drawerJobId = null;
 }
 
-async function _trackerUpdateStage(jobId, stage) {
-  await fetch(`/api/tracker/${jobId}/stage`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stage })
-  });
-  const app = _trackerData.find(a => a.job_id === jobId);
-  if (app) { app.stage = stage; }
-  loadTracker();
+async function _trackerUpdateField(appId, field, value) {
+  const app = _trackerData.find(a => (a.id || a.job_id) === appId);
+  if (app) app[field] = value;
+
+  if (_trackerSource === "sheets") {
+    await fetch(`/api/applications/${appId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value })
+    });
+  } else {
+    // Legacy local endpoints
+    const jobId = app?.job_id || appId;
+    if (field === "status" || field === "stage") {
+      await fetch(`/api/tracker/${jobId}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: value })
+      });
+      loadTracker();
+    } else if (field === "notes") {
+      await fetch(`/api/tracker/${jobId}/notes`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: value })
+      });
+    } else if (field === "next_action_date" || field === "follow_up_due") {
+      await fetch(`/api/tracker/${jobId}/follow_up`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ follow_up_due: value || null })
+      });
+    } else {
+      await fetch(`/api/applications/${appId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value })
+      });
+    }
+  }
 }
 
-async function _trackerUpdateNotes(jobId, notes) {
-  await fetch(`/api/tracker/${jobId}/notes`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notes })
-  });
+// Legacy aliases used in existing apply flow
+async function _trackerUpdateStage(jobId, stage) { return _trackerUpdateField(jobId, "status", stage); }
+async function _trackerUpdateNotes(jobId, notes) { return _trackerUpdateField(jobId, "notes", notes); }
+async function _trackerFollowUp(jobId, date) { return _trackerUpdateField(jobId, "next_action_date", date); }
+
+// ── Job URL parsing ────────────────────────────────────────────
+
+function _detectSource(hostname) {
+  if (hostname.includes("linkedin.com")) return "LinkedIn";
+  if (hostname.includes("reed.co.uk"))  return "Reed";
+  if (hostname.includes("adzuna.co.uk") || hostname.includes("adzuna.com")) return "Adzuna";
+  if (hostname.includes("indeed.com"))  return "Indeed";
+  if (hostname.includes("totaljobs.com")) return "TotalJobs";
+  if (hostname.includes("cwjobs.co.uk")) return "CWJobs";
+  if (hostname.includes("glassdoor.com")) return "Glassdoor";
+  return "Direct";
 }
 
-async function _trackerFollowUp(jobId, date) {
-  await fetch(`/api/tracker/${jobId}/follow_up`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ follow_up_due: date || null })
-  });
+// Best-effort slug→title: "senior-java-engineer" → "Senior Java Engineer"
+function _slugToTitle(slug) {
+  return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
+// Extract what we can from the URL string alone, instantly
+function _parseUrlLocally(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch (_) { return null; }
+  const host = parsed.hostname;
+  const path = parsed.pathname;
+  const source = _detectSource(host);
+  const result = { source };
+
+  if (source === "LinkedIn") {
+    // https://www.linkedin.com/jobs/view/senior-java-engineer-at-acme-3940xxxxx
+    const m = path.match(/\/jobs\/view\/([^/]+)/);
+    if (m) {
+      const slug = m[1].replace(/-\d+$/, ""); // strip trailing ID
+      const atIdx = slug.lastIndexOf("-at-");
+      if (atIdx !== -1) {
+        result.job_title = _slugToTitle(slug.slice(0, atIdx));
+        result.company   = _slugToTitle(slug.slice(atIdx + 4));
+      } else {
+        result.job_title = _slugToTitle(slug);
+      }
+    }
+  } else if (source === "Reed") {
+    // https://www.reed.co.uk/jobs/senior-java-engineer/12345678
+    const m = path.match(/\/jobs\/([^/]+)\/\d+/);
+    if (m) result.job_title = _slugToTitle(m[1]);
+  } else if (source === "Adzuna") {
+    // https://www.adzuna.co.uk/jobs/details/4747xxx?title=Senior+Java+Engineer
+    const t = parsed.searchParams.get("title");
+    if (t) result.job_title = decodeURIComponent(t.replace(/\+/g, " "));
+  } else if (source === "Indeed") {
+    const t = parsed.searchParams.get("q");
+    if (t) result.job_title = decodeURIComponent(t.replace(/\+/g, " "));
+  }
+
+  return result;
+}
+
+function onJobUrlInput() {
+  const url = document.getElementById("na-url").value.trim();
+  const btn = document.getElementById("na-fetch-btn");
+  btn.disabled = !url || !url.startsWith("http");
+
+  if (!url) return;
+  const local = _parseUrlLocally(url);
+  if (!local) return;
+
+  // Auto-set source dropdown
+  if (local.source) {
+    const sel = document.getElementById("na-source");
+    for (const opt of sel.options) {
+      if (opt.value === local.source || opt.text === local.source) {
+        sel.value = opt.value;
+        break;
+      }
+    }
+  }
+  // Fill title / company only if fields are empty
+  if (local.job_title && !document.getElementById("na-title").value)
+    document.getElementById("na-title").value = local.job_title;
+  if (local.company && !document.getElementById("na-company").value)
+    document.getElementById("na-company").value = local.company;
+}
+
+async function extractFromPageText() {
+  const text = document.getElementById("na-page-text").value.trim();
+  if (!text) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = "Extracting...";
+  const status = document.getElementById("na-fetch-status");
+  status.style.display = "";
+  status.style.color = "var(--muted)";
+  status.textContent = "Sending to Claude...";
+  try {
+    const r = await fetch("/api/applications/parse-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Extraction failed");
+    _applyParsedFields(d.fields || {});
+    const filled = [d.fields?.company, d.fields?.job_title, d.fields?.location, d.fields?.jd_text].filter(Boolean).length;
+    status.textContent = `Filled ${filled} field${filled !== 1 ? "s" : ""}.`;
+    status.style.color = "var(--teal)";
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
+    status.style.color = "var(--red)";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Extract fields →";
+  }
+}
+
+function _applyParsedFields(fields) {
+  const set = (id, val) => { if (val && !document.getElementById(id)?.value) document.getElementById(id).value = val; };
+  const setAlways = (id, val) => { if (val) document.getElementById(id).value = val; };
+  setAlways("na-company",  fields.company);
+  setAlways("na-title",    fields.job_title);
+  set("na-location",       fields.location);
+  set("na-salary",         fields.salary);
+  if (fields.contract_type) {
+    const sel = document.getElementById("na-contract");
+    for (const opt of sel.options) {
+      if (opt.text.toLowerCase() === fields.contract_type.toLowerCase()) { sel.value = opt.value; break; }
+    }
+  }
+  if (fields.source) {
+    const sel = document.getElementById("na-source");
+    for (const opt of sel.options) {
+      if (opt.text === fields.source) { sel.value = opt.value; break; }
+    }
+  }
+  if (fields.jd_text && !document.getElementById("na-jd").value)
+    document.getElementById("na-jd").value = fields.jd_text;
+}
+
+async function fetchJobFromUrl() {
+  const url = document.getElementById("na-url").value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById("na-fetch-btn");
+  const status = document.getElementById("na-fetch-status");
+  btn.disabled = true;
+  btn.textContent = "Fetching...";
+  status.textContent = "Fetching page...";
+  status.style.display = "";
+  status.style.color = "var(--muted)";
+
+  try {
+    const r = await fetch("/api/applications/parse-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+      signal: AbortSignal.timeout(40000)
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      // Show paste fallback for Cloudflare / fetch failures
+      document.getElementById("na-paste-fallback").style.display = "";
+      throw new Error(d.detail || "Fetch failed");
+    }
+
+    const fields = d.fields || {};
+    _applyParsedFields(fields);
+
+    const filled = [fields.company, fields.job_title, fields.location, fields.jd_text].filter(Boolean).length;
+    if (filled === 0) {
+      document.getElementById("na-paste-fallback").style.display = "";
+      status.textContent = "Page returned no content (Cloudflare or JS-only). Paste page text below.";
+      status.style.color = "var(--amber)";
+    } else {
+      status.textContent = `Filled ${filled} field${filled !== 1 ? "s" : ""} from page.`;
+      status.style.color = "var(--teal)";
+    }
+  } catch (e) {
+    const isTimeout = e.name === "TimeoutError" || e.name === "AbortError";
+    status.textContent = isTimeout ? "Timed out. Paste page text below." : "Could not fetch: " + e.message;
+    status.style.color = "var(--red)";
+    document.getElementById("na-paste-fallback").style.display = "";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Fetch →";
+  }
+}
+
+let _cvInputMode = "select"; // "select" | "custom"
+
+function toggleCVInput() {
+  _cvInputMode = _cvInputMode === "select" ? "custom" : "select";
+  document.getElementById("na-cv-mode-select").style.display = _cvInputMode === "select" ? "" : "none";
+  document.getElementById("na-cv-mode-custom").style.display = _cvInputMode === "custom" ? "" : "none";
+  document.getElementById("na-cv-toggle-label").textContent =
+    _cvInputMode === "select" ? "paste / upload instead" : "pick from list instead";
+}
+
+function onCVFileUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  // Auto-fill the filename field
+  const nameEl = document.getElementById("na-cv-custom-name");
+  if (nameEl && !nameEl.value) nameEl.value = file.name;
+  // Read contents into the textarea
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById("na-cv-latex").value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+function openNewAppForm() {
+  document.getElementById("new-app-overlay").style.display = "";
+  document.getElementById("new-app-modal").style.display = "";
+  document.getElementById("na-error").style.display = "none";
+  // Default date applied to today
+  const today = new Date().toISOString().slice(0, 10);
+  const dateEl = document.getElementById("na-date");
+  if (dateEl && !dateEl.value) dateEl.value = today;
+  // Reset CV input to dropdown mode
+  if (_cvInputMode !== "select") toggleCVInput();
+}
+
+function closeNewAppForm() {
+  document.getElementById("new-app-overlay").style.display = "none";
+  document.getElementById("new-app-modal").style.display = "none";
+}
+
+async function saveNewApplication() {
+  const errEl = document.getElementById("na-error");
+  errEl.style.display = "none";
+
+  const company = document.getElementById("na-company").value.trim();
+  const jobTitle = document.getElementById("na-title").value.trim();
+  if (!company && !jobTitle) {
+    errEl.textContent = "Company or Job title is required.";
+    errEl.style.display = "";
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const data = {
+    date_applied: document.getElementById("na-date").value || today,
+    company,
+    job_title: jobTitle,
+    job_url: document.getElementById("na-url").value.trim(),
+    location: document.getElementById("na-location").value.trim(),
+    contract_type: document.getElementById("na-contract").value,
+    inside_ir35: document.getElementById("na-ir35").value,
+    day_rate_or_salary: document.getElementById("na-salary").value.trim(),
+    source: document.getElementById("na-source").value,
+    recruiter_name: document.getElementById("na-recruiter").value.trim(),
+    recruiter_contact: document.getElementById("na-recruiter-contact").value.trim(),
+    stage_detail: document.getElementById("na-stage-detail").value.trim(),
+    cv_variant: _cvInputMode === "select"
+      ? document.getElementById("na-cv-variant").value
+      : document.getElementById("na-cv-custom-name").value.trim(),
+    cv_latex: _cvInputMode === "custom"
+      ? document.getElementById("na-cv-latex").value.trim()
+      : "",
+    status: document.getElementById("na-status").value,
+    visa_sponsorship_needed: document.getElementById("na-visa").value,
+    next_action: document.getElementById("na-next-action").value.trim(),
+    next_action_date: document.getElementById("na-next-date").value,
+    jd_text: document.getElementById("na-jd").value.trim(),
+    notes: document.getElementById("na-notes").value.trim(),
+  };
+
+  try {
+    const r = await fetch("/api/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Save failed");
+    closeNewAppForm();
+    // Clear form
+    ["na-date","na-url","na-company","na-title","na-location","na-salary","na-recruiter","na-recruiter-contact","na-stage-detail","na-next-action","na-jd","na-notes","na-cv-custom-name","na-cv-latex"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    loadTracker();
+  } catch (e) {
+    errEl.textContent = "Error: " + e.message;
+    errEl.style.display = "";
+  }
 }
 
 async function _viewTrackerFile(jobId, filename) {
@@ -1978,4 +2437,502 @@ async function _viewTrackerFile(jobId, filename) {
   } catch (e) {
     contentEl.textContent = "Error: " + e.message;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Fit Analysis — /api/align/full
+// ═══════════════════════════════════════════════════════════════
+
+function _profileToPlainText() {
+  const p = PROFILE;
+  const lines = [];
+  lines.push(p.name);
+  lines.push(`${p.location} | ${p.email} | ${p.phone}`);
+  if (p.linkedin) lines.push(p.linkedin);
+  lines.push('');
+
+  // Skills
+  lines.push('SKILLS');
+  Object.entries(p.skills || {}).forEach(([cat, items]) => {
+    lines.push(`${cat}: ${items.join(', ')}`);
+  });
+  lines.push('');
+
+  // Experience
+  lines.push('EXPERIENCE');
+  (p.experience || []).forEach(e => {
+    lines.push(`${e.role} — ${e.co} (${e.dates})`);
+    (e.bullets || []).forEach(b => lines.push(`  • ${b}`));
+    lines.push('');
+  });
+
+  // Projects
+  if ((p.projects || []).length) {
+    lines.push('PROJECTS');
+    p.projects.forEach(proj => {
+      lines.push(`${proj.title}${proj.context ? ' — ' + proj.context : ''}`);
+      (proj.bullets || []).forEach(b => lines.push(`  • ${b}`));
+      lines.push('');
+    });
+  }
+
+  // Education
+  lines.push('EDUCATION');
+  (p.education || []).forEach(e => {
+    lines.push(`${e.degree} — ${e.inst} (${e.year})`);
+    if (e.note) lines.push(`  ${e.note}`);
+  });
+  lines.push('');
+
+  // Certifications
+  if ((p.certifications || []).length) {
+    lines.push('CERTIFICATIONS');
+    p.certifications.forEach(c => lines.push(`  • ${c}`));
+  }
+
+  return lines.join('\n');
+}
+
+function _prefillFACv() {
+  const el = document.getElementById('fa-cv-text');
+  if (el && !el.value.trim()) {
+    el.value = _profileToPlainText();
+  }
+}
+
+let _faLastRequest = null;
+let _faPendingQuestions = [];
+
+function resetFitAnalysis() {
+  document.getElementById('fa-input-section').style.display = '';
+  document.getElementById('fa-results').style.display = 'none';
+  document.getElementById('fa-clarify-section').style.display = 'none';
+  document.getElementById('fa-loading').style.display = 'none';
+  document.getElementById('fa-err').style.display = 'none';
+  _faLastRequest = null;
+  _faPendingQuestions = [];
+}
+
+async function runFitAnalysisFull(clarifications = {}) {
+  const cvText = document.getElementById('fa-cv-text').value.trim();
+  const jdText = document.getElementById('fa-jd-text').value.trim();
+  const errEl = document.getElementById('fa-err');
+  errEl.style.display = 'none';
+
+  if (!cvText || !jdText) {
+    errEl.textContent = 'Please enter both CV text and job description.';
+    errEl.style.display = '';
+    return;
+  }
+
+  _faLastRequest = { cv_text: cvText, jd_text: jdText, clarifications };
+
+  document.getElementById('fa-input-section').style.display = 'none';
+  document.getElementById('fa-clarify-section').style.display = 'none';
+  document.getElementById('fa-results').style.display = 'none';
+  document.getElementById('fa-loading').style.display = '';
+
+  try {
+    const resp = await fetch('/api/align/full', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_faLastRequest),
+    });
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      throw new Error(d.detail || resp.statusText);
+    }
+    const data = await resp.json();
+    const map = data.alignment_map;
+
+    document.getElementById('fa-loading').style.display = 'none';
+
+    if (map.clarifying_questions && map.clarifying_questions.length > 0 && Object.keys(clarifications).length === 0) {
+      _faPendingQuestions = map.clarifying_questions;
+      _showClarifySection(map.clarifying_questions);
+      return;
+    }
+
+    _renderAlignmentMap(map);
+  } catch (e) {
+    document.getElementById('fa-loading').style.display = 'none';
+    document.getElementById('fa-input-section').style.display = '';
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.style.display = '';
+  }
+}
+
+const _FA_CLARIFY_KEY = 'cvfit_clarifications';
+
+function _loadSavedClarifications() {
+  try { return JSON.parse(localStorage.getItem(_FA_CLARIFY_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function _saveClarifications(obj) {
+  try { localStorage.setItem(_FA_CLARIFY_KEY, JSON.stringify(obj)); }
+  catch { /* storage full — non-fatal */ }
+}
+
+function _showClarifySection(questions) {
+  const saved = _loadSavedClarifications();
+  const listEl = document.getElementById('fa-questions-list');
+  listEl.innerHTML = '';
+  questions.forEach((q, i) => {
+    const div = document.createElement('div');
+    div.className = 'field';
+    const savedVal = saved[q] || '';
+    div.innerHTML = `<label class="lbl">Q${i+1}: ${q}</label>
+      <input type="text" id="fa-clarify-${i}" placeholder="Your answer..."
+        value="${savedVal.replace(/"/g, '&quot;')}" />
+      ${savedVal ? '<div style="font-size:11px;color:var(--teal);margin-top:2px">Previously answered — edit to update</div>' : ''}`;
+    listEl.appendChild(div);
+  });
+  document.getElementById('fa-clarify-section').style.display = '';
+}
+
+function submitFitClarifications() {
+  const saved = _loadSavedClarifications();
+  const clarifications = {};
+  _faPendingQuestions.forEach((q, i) => {
+    const val = (document.getElementById(`fa-clarify-${i}`) || {}).value || '';
+    if (val.trim()) {
+      clarifications[q] = val.trim();
+      saved[q] = val.trim();  // persist
+    }
+  });
+  _saveClarifications(saved);
+  document.getElementById('fa-clarify-section').style.display = 'none';
+  runFitAnalysisFull(clarifications);
+}
+
+function _evidenceBadge(state) {
+  const cfg = {
+    stated:      { cls: 'badge-green', label: 'stated' },
+    inferred:    { cls: 'badge-amber', label: 'inferred', tip: 'Based on inference — verify before interview' },
+    missing:     { cls: 'badge-red',   label: 'missing' },
+    unsupported: { cls: 'badge-red',   label: 'unsupported' },
+  };
+  const c = cfg[state] || { cls: 'badge-muted', label: state };
+  const tip = c.tip ? ` title="${c.tip}"` : '';
+  const style = state === 'unsupported' ? ' style="text-decoration:line-through"' : '';
+  return `<span class="badge ${c.cls}"${tip}${style}>${c.label}</span>`;
+}
+
+function _renderAlignmentMap(map) {
+  // Requirements table
+  const reqEl = document.getElementById('fa-req-table');
+  if (map.requirements && map.requirements.length) {
+    const rows = map.requirements.map(r => `
+      <tr>
+        <td style="padding:6px 8px;color:var(--hint);font-size:12px">${r.rank}</td>
+        <td style="padding:6px 8px;font-size:13px">${r.text}</td>
+        <td style="padding:6px 8px"><span class="badge badge-${r.importance === 'critical' ? 'red' : r.importance === 'high' ? 'amber' : 'muted'}">${r.importance}</span></td>
+        <td style="padding:6px 8px">${_evidenceBadge(r.evidence_state)}</td>
+        <td style="padding:6px 8px;font-size:12px;color:var(--muted)">${r.cv_evidence || '<em>none</em>'}</td>
+      </tr>`).join('');
+    reqEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--hint)">#</th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--hint)">Requirement</th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--hint)">Importance</th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--hint)">Evidence</th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--hint)">CV evidence</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+  } else {
+    reqEl.innerHTML = '<p style="color:var(--muted);font-size:13px">No requirements extracted.</p>';
+  }
+
+  // Bullets
+  const bulletsEl = document.getElementById('fa-bullets');
+  const gaps = (map.requirements || []).filter(r => r.evidence_state === 'missing');
+  let bulletsHtml = '';
+  if (map.rewritten_bullets && map.rewritten_bullets.length) {
+    bulletsHtml += map.rewritten_bullets.map(b => `
+      <div class="card" style="margin-bottom:.5rem">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Before</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${b.original}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">After ${_evidenceBadge(b.evidence_state)}</div>
+        <div style="font-size:13px;font-weight:500">${b.rewritten}</div>
+        ${b.flag ? `<div style="margin-top:6px;font-size:11px;color:var(--amber)">⚠ ${b.flag}</div>` : ''}
+      </div>`).join('');
+  }
+  if (gaps.length) {
+    bulletsHtml += `<div style="margin-top:.75rem;font-size:13px;font-weight:600;color:var(--red);margin-bottom:4px">Gaps (no rewrite produced)</div>`;
+    bulletsHtml += gaps.map(r => `<div class="card" style="border-color:#fca5a5;margin-bottom:.5rem">
+      <span class="badge badge-red">missing</span>
+      <span style="margin-left:8px;font-size:13px">${r.text}</span>
+    </div>`).join('');
+  }
+  const blocked = map.blocked_rewrites || [];
+  if (blocked.length) {
+    bulletsHtml += `<div style="margin-top:.75rem;font-size:13px;font-weight:600;color:var(--red);margin-bottom:4px">Blocked rewrites (unsupported claims)</div>`;
+    bulletsHtml += blocked.map(b => `<div class="card" style="border-color:#fca5a5;margin-bottom:.5rem">
+      <span class="badge badge-red" style="text-decoration:line-through">unsupported</span>
+      <div style="font-size:13px;margin-top:4px;color:var(--muted)">${b.original}</div>
+      <div style="font-size:11px;margin-top:4px;color:var(--red)">⛔ ${b.detail}</div>
+    </div>`).join('');
+  }
+  bulletsEl.innerHTML = bulletsHtml || '<p style="color:var(--muted);font-size:13px">No bullets to rewrite.</p>';
+
+  // Score
+  const scoreEl = document.getElementById('fa-score-breakdown');
+  const s = map.score;
+  if (s) {
+    const dims = [
+      ['Keyword match', s.keyword_match],
+      ['Skills match', s.skills_match],
+      ['Outcome alignment', s.outcome_alignment],
+      ['Role fit', s.role_fit],
+      ['Seniority fit', s.seniority_fit],
+      ['Recruiter readability', s.recruiter_readability],
+    ];
+    const fillCls = v => v >= 70 ? 'fill-hi' : v >= 45 ? 'fill-mid' : 'fill-lo';
+    scoreEl.innerHTML = `
+      <div style="font-size:28px;font-weight:700;color:var(--navy);margin-bottom:1rem">${s.overall}<span style="font-size:16px;font-weight:400;color:var(--muted)">/100</span></div>
+      ${dims.map(([lbl, val]) => `
+        <div style="margin-bottom:.6rem">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span>${lbl}</span><span style="font-weight:600">${val}</span>
+          </div>
+          <div class="score-bar"><div class="score-fill ${fillCls(val)}" style="width:${val}%"></div></div>
+        </div>`).join('')}`;
+
+    if (s.missing_high_priority && s.missing_high_priority.length) {
+      const missingEl = document.getElementById('fa-missing-tags');
+      missingEl.innerHTML = s.missing_high_priority.map(t => `<span class="tag gap">${t}</span>`).join('');
+      document.getElementById('fa-missing-section').style.display = '';
+    }
+    if (s.safe_edits && s.safe_edits.length) {
+      const seEl = document.getElementById('fa-safe-edits-list');
+      seEl.innerHTML = s.safe_edits.map(a => `<li style="margin-bottom:.4rem">${a}</li>`).join('');
+      document.getElementById('fa-safe-edits-section').style.display = '';
+    }
+    if (s.evidence_needed && s.evidence_needed.length) {
+      const enEl = document.getElementById('fa-evidence-needed-list');
+      enEl.innerHTML = s.evidence_needed.map(a => `<li style="margin-bottom:.4rem">${a}</li>`).join('');
+      document.getElementById('fa-evidence-needed-section').style.display = '';
+    }
+  }
+
+  // Verdict
+  const verdictEl = document.getElementById('fa-verdict');
+  const v = map.verdict;
+  if (v) {
+    const decideCls = v.would_interview ? 'insight ok' : 'insight warn';
+    verdictEl.innerHTML = `
+      <div class="${decideCls}" style="margin-bottom:.75rem">
+        <strong>${v.would_interview ? '✓ Would interview' : '✗ Would not interview'}</strong> — ${v.reason}
+      </div>
+      <div class="card" style="margin-bottom:.5rem">
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:3px">Biggest doubt</div>
+        <div style="font-size:13px">${v.biggest_doubt}</div>
+      </div>
+      <div class="card">
+        <div style="font-size:11px;font-weight:600;color:var(--teal);margin-bottom:3px">Fix</div>
+        <div style="font-size:13px">${v.fix}</div>
+      </div>`;
+  }
+
+  // Phase 5 — tailor handoff
+  document.getElementById('fa-tailor-handoff').style.display = '';
+  window._faCurrentMap = map;
+
+  document.getElementById('fa-results').style.display = '';
+}
+
+// ── Phase 5 — fit-to-tailor handoff ──────────────────────────
+
+let _faTailorMap = null;
+
+function _showEvidenceNeededInterstitial() {
+  const items = (window._faCurrentMap.score.evidence_needed || []);
+  if (!items.length) {
+    _submitTailorRequest({});
+    return;
+  }
+  const listEl = document.getElementById('fa-ev-needed-checklist');
+  listEl.innerHTML = items.map((item, i) => `
+    <div class="field" style="margin-bottom:.75rem">
+      <label class="lbl" style="margin-bottom:4px">${item}</label>
+      <input type="text" id="fa-ev-${i}" placeholder="Your answer (leave blank to omit)" />
+    </div>`).join('');
+  document.getElementById('fa-results').style.display = 'none';
+  document.getElementById('fa-evidence-interstitial').style.display = '';
+}
+
+function continueWithoutEvidence() {
+  document.getElementById('fa-evidence-interstitial').style.display = 'none';
+  _submitTailorRequest({});
+}
+
+function submitEvidenceAndTailor() {
+  const items = (window._faCurrentMap.score.evidence_needed || []);
+  const confirmed = {};
+  items.forEach((item, i) => {
+    const val = (document.getElementById(`fa-ev-${i}`) || {}).value || '';
+    if (val.trim()) confirmed[item] = val.trim();
+  });
+  document.getElementById('fa-evidence-interstitial').style.display = 'none';
+  _submitTailorRequest(confirmed);
+}
+
+async function _submitTailorRequest(confirmedEvidence) {
+  const cvText = document.getElementById('fa-cv-text').value.trim();
+  const loadingEl = document.getElementById('fa-tailor-loading');
+  loadingEl.style.display = '';
+
+  // Switch to output tab and show spinner immediately
+  switchTab('output');
+  document.getElementById('out-loading').style.display = 'flex';
+  document.getElementById('out-msg').textContent = 'Tailoring CV — applying rewrites...';
+  document.getElementById('out-area').style.display = 'none';
+  document.getElementById('out-empty').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/align/tailor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cv_text: cvText,
+        jd_text: document.getElementById('fa-jd-text').value.trim(),
+        alignment_map: window._faCurrentMap,
+        confirmed_evidence: confirmedEvidence,
+      }),
+    });
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      throw new Error(d.detail || resp.statusText);
+    }
+    const data = await resp.json();
+    loadingEl.style.display = 'none';
+    document.getElementById('out-loading').style.display = 'none';
+    _renderTailoredOutput(data);
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    document.getElementById('out-loading').style.display = 'none';
+    document.getElementById('out-loading').innerHTML = `<span style="color:var(--red)">Tailor failed: ${e.message}</span>`;
+    document.getElementById('out-loading').style.display = 'flex';
+    alert('Tailor error: ' + e.message);
+  }
+}
+
+function _buildLatexFromPlainText(cvText) {
+  const esc = s => (s || "")
+    .replace(/&/g, "\\&").replace(/%/g, "\\%").replace(/#/g, "\\#")
+    .replace(/_/g, "\\_").replace(/\$/g, "\\$").replace(/~/g, "\\textasciitilde{}");
+
+  let tex = `\\documentclass[a4paper,10pt]{article}\n`;
+  tex += `\\usepackage[T1]{fontenc}\\usepackage[utf8]{inputenc}\\usepackage{lmodern}\n`;
+  tex += `\\usepackage{geometry}\\usepackage{enumitem}\\usepackage[hidelinks]{hyperref}\n`;
+  tex += `\\usepackage{xcolor}\\usepackage{titlesec}\n`;
+  tex += `\\geometry{top=0.6in,bottom=0.6in,left=0.7in,right=0.7in}\n`;
+  tex += `\\definecolor{navy}{HTML}{1A3C5E}\\definecolor{muted}{HTML}{555555}\\definecolor{body}{HTML}{222222}\n`;
+  tex += `\\titleformat{\\section}{\\normalfont\\small\\bfseries\\color{navy}}{}{0em}{\\MakeUppercase}[\\vspace{2pt}{\\color{navy}\\titlerule[1.2pt]}]\n`;
+  tex += `\\titlespacing*{\\section}{0pt}{10pt}{6pt}\n`;
+  tex += `\\setlist[itemize]{leftmargin=1.4em,itemsep=1.5pt,topsep=3pt,parsep=0pt,label={\\color{navy}\\normalsize$\\bullet$}}\n`;
+  tex += `\\pagestyle{empty}\\setlength{\\parindent}{0pt}\n\\begin{document}\n\n`;
+
+  // Header from PROFILE
+  tex += `\\begin{center}\n`;
+  tex += `  {\\fontsize{24}{28}\\selectfont\\bfseries\\color{navy}${esc(PROFILE.name)}}\\par\\vspace{4pt}\n`;
+  tex += `  {\\footnotesize\\color{muted}${esc(PROFILE.location)} $\\cdot$ ${esc(PROFILE.phone)} $\\cdot$ ${esc(PROFILE.email)}}\\par\\vspace{2pt}\n`;
+  tex += `  {\\footnotesize\\color{muted}\\href{${PROFILE.linkedin}}{LinkedIn} $\\cdot$ \\href{${PROFILE.github}}{GitHub}}\n`;
+  tex += `\\end{center}\n\\vspace{4pt}{\\color{navy}\\hrule height 0.8pt}\\vspace{6pt}\n\n`;
+
+  // Body: convert plain text lines to LaTeX
+  const lines = cvText.split('\n');
+  let inList = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (inList) { tex += `\\end{itemize}\n`; inList = false; }
+      tex += `\\vspace{4pt}\n`;
+      continue;
+    }
+    // ALL-CAPS lines → section headings
+    if (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && !/[•\-\d]/.test(trimmed[0])) {
+      if (inList) { tex += `\\end{itemize}\n`; inList = false; }
+      tex += `\\section{${esc(trimmed)}}\n`;
+      continue;
+    }
+    // Bullet lines
+    if (/^[•\-\*]/.test(trimmed)) {
+      if (!inList) { tex += `\\begin{itemize}\n`; inList = true; }
+      tex += `  \\item ${esc(trimmed.replace(/^[•\-\*]\s*/, ""))}\n`;
+      continue;
+    }
+    if (inList) { tex += `\\end{itemize}\n`; inList = false; }
+    tex += `\\noindent {\\small\\color{body}${esc(trimmed)}}\\par\\vspace{2pt}\n`;
+  }
+  if (inList) tex += `\\end{itemize}\n`;
+  tex += `\n\\end{document}\n`;
+  return tex;
+}
+
+function _renderTailoredOutput(data) {
+  window._faTailoredResult = data;
+
+  const cv = data.tailored_cv || '';
+
+  // CV preview — render plain text with light formatting
+  const cvPreviewEl = document.getElementById('out-cv');
+  if (cvPreviewEl) {
+    const html = cv.split('\n').map(line => {
+      if (!line.trim()) return '<div style="margin-bottom:.4rem"></div>';
+      // ALL-CAPS lines treated as section headings
+      if (line === line.toUpperCase() && line.trim().length > 2 && !/[•\-]/.test(line))
+        return `<div class="cv-section">${line.trim()}</div>`;
+      if (line.trim().startsWith('•'))
+        return `<div style="font-size:13px;margin-left:1.2rem;margin-bottom:2px">${line.trim()}</div>`;
+      return `<div style="font-size:13px;margin-bottom:2px">${line}</div>`;
+    }).join('');
+    cvPreviewEl.innerHTML = html;
+  }
+
+  // Plain text
+  const plainEl = document.getElementById('out-plain');
+  if (plainEl) plainEl.textContent = cv;
+
+  // Build LaTeX from the tailored plain-text CV so download/copy/PDF all work
+  const latexEl = document.getElementById('out-latex');
+  if (latexEl) latexEl.textContent = _buildLatexFromPlainText(cv);
+
+  // Show LaTeX tab; hide cover (not generated in this flow)
+  const latexTab = document.querySelector(`.out-tab[onclick="switchOut('latex')"]`);
+  const coverTab = document.getElementById('cover-tab-btn');
+  if (latexTab) latexTab.style.display = '';
+  if (coverTab) coverTab.style.display = 'none';
+  document.getElementById('out-cover').innerHTML = '<p style="color:var(--muted)">Cover letter not generated in Fit Analysis flow.</p>';
+
+  // Change log and omitted gaps
+  const changeLogEl = document.getElementById('out-change-log');
+  const omittedEl = document.getElementById('out-omitted-gaps');
+  if (changeLogEl) {
+    changeLogEl.innerHTML = (data.change_log || []).map(c => `<li>${c}</li>`).join('');
+    document.getElementById('out-change-log-section').style.display = (data.change_log || []).length ? '' : 'none';
+  }
+  if (omittedEl) {
+    omittedEl.innerHTML = (data.omitted_gaps || []).map(g => `<li>${g}</li>`).join('');
+    document.getElementById('out-omitted-section').style.display = (data.omitted_gaps || []).length ? '' : 'none';
+  }
+
+  // Metrics area — simple summary
+  document.getElementById('out-metrics').innerHTML = `
+    <div class="metric" style="grid-column:span 3">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;text-align:left;padding-top:4px">
+        Tailored from Fit Analysis · ${(data.change_log || []).length} edits applied · ${(data.omitted_gaps || []).length} gaps omitted
+      </div>
+    </div>`;
+
+  // Restore fit analysis state so it's intact if user navigates back
+  document.getElementById('fa-evidence-interstitial').style.display = 'none';
+  document.getElementById('fa-tailor-loading').style.display = 'none';
+  document.getElementById('fa-results').style.display = '';
+
+  lastOutput = data;
+  switchTab('output');
+  document.getElementById('out-area').style.display = '';
+  document.getElementById('out-empty').style.display = 'none';
+  switchOut('cv');
 }

@@ -6,3 +6,5 @@ playwright>=1.44.0
 playwright-stealth>=1.0.6
 aiosqlite>=0.20.0
 rapidfuzz>=3.0.0
+gspread>=6.0.0
+google-auth>=2.0.0

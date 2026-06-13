@@ -204,6 +204,9 @@
   <div class="nav-item" onclick="switchTab('output')" id="nav-output">
     <span class="nav-icon">📄</span> Output
   </div>
+  <div class="nav-item" onclick="switchTab('fitanalysis')" id="nav-fitanalysis">
+    <span class="nav-icon">🔬</span> Fit Analysis
+  </div>
   <div class="nav-item" onclick="switchTab('applications')" id="nav-applications">
     <span class="nav-icon">📨</span> Applications
   </div>
@@ -340,23 +343,200 @@
 
   <!-- APPLICATIONS -->
   <div id="panel-applications" class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
       <div>
         <div class="panel-title">Applications</div>
         <div class="panel-sub" style="margin-bottom:0">Track your pipeline from applied to offer.</div>
       </div>
-      <button class="btn btn-sm" onclick="loadTracker()">Refresh</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="loadTracker()">Refresh</button>
+        <button class="btn btn-primary btn-sm" onclick="openNewAppForm()">+ New Application</button>
+      </div>
     </div>
-    <div style="margin-bottom:.75rem">
-      <input type="text" id="tracker-search" placeholder="Search company or role..." oninput="filterTracker()" style="width:100%;max-width:340px;padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px" />
+    <div style="display:flex;gap:1rem;align-items:center;margin-bottom:.75rem">
+      <input type="text" id="tracker-search" placeholder="Search company or role..." oninput="filterTracker()" style="flex:1;max-width:340px;padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px" />
     </div>
-    <div id="tracker-stats" style="display:flex;gap:1.5rem;margin-bottom:1rem;font-size:12px;color:var(--muted)"></div>
+    <div id="tracker-stats" style="display:flex;gap:1.5rem;margin-bottom:1rem;font-size:12px;color:var(--muted);flex-wrap:wrap"></div>
     <div id="tracker-loading" class="loading-row" style="display:none"><div class="spinner"></div><span>Loading...</span></div>
-    <div id="tracker-empty" style="color:var(--muted);font-size:13px;padding:2rem 0">No applications yet. Use the Apply button on job cards.</div>
+    <div id="tracker-empty" style="color:var(--muted);font-size:13px;padding:2rem 0">No applications yet. Click <strong>+ New Application</strong> to add one, or use the Apply button on job cards.</div>
     <div id="kanban-board" style="display:flex;gap:1rem;overflow-x:auto;padding-bottom:1rem"></div>
 
+    <!-- New Application form modal -->
+    <div id="new-app-overlay" onclick="closeNewAppForm()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1002"></div>
+    <div id="new-app-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,96vw);max-height:90vh;overflow-y:auto;background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 48px rgba(0,0,0,.18);z-index:1003;padding:1.5rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div style="font-size:16px;font-weight:600;color:var(--navy)">New Application</div>
+        <button class="btn btn-sm btn-ghost" onclick="closeNewAppForm()">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+        <!-- Left: quick entry -->
+        <div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Date applied</label>
+              <input type="date" id="na-date" />
+            </div>
+            <div class="field">
+              <label class="lbl">Status</label>
+              <select id="na-status">
+                <option value="applied">Applied</option>
+                <option value="cv_sent">CV Sent</option>
+                <option value="interview_1">1st Interview</option>
+                <option value="interview_2">2nd Interview</option>
+                <option value="final_round">Final Round</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl">Job URL</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" id="na-url" placeholder="https://..." oninput="onJobUrlInput()" style="flex:1" />
+              <button class="btn btn-sm btn-primary" id="na-fetch-btn" onclick="fetchJobFromUrl()" style="flex-shrink:0;white-space:nowrap" disabled>Fetch →</button>
+            </div>
+            <div id="na-fetch-status" style="font-size:11px;margin-top:4px;display:none"></div>
+            <!-- Page text fallback — shown when fetch fails -->
+            <div id="na-paste-fallback" style="display:none;margin-top:8px">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Site blocked auto-fetch. Select all text on the job page (Cmd+A, Cmd+C), paste below:</div>
+              <textarea id="na-page-text" rows="4" style="font-size:11px;font-family:inherit;line-height:1.5" placeholder="Paste page text here, then click Extract →"></textarea>
+              <button class="btn btn-sm btn-primary" style="margin-top:6px" onclick="extractFromPageText()">Extract fields →</button>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Company</label>
+              <input type="text" id="na-company" placeholder="Company name" />
+            </div>
+            <div class="field">
+              <label class="lbl">Job title</label>
+              <input type="text" id="na-title" placeholder="e.g. Senior Java Engineer" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Location</label>
+              <input type="text" id="na-location" placeholder="e.g. Manchester, Remote" />
+            </div>
+            <div class="field">
+              <label class="lbl">Salary / Rate</label>
+              <input type="text" id="na-salary" placeholder="e.g. £65k or £540/day" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Contract type</label>
+              <select id="na-contract">
+                <option>Permanent</option>
+                <option>Contract</option>
+                <option>FTC</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="lbl">IR35</label>
+              <select id="na-ir35">
+                <option value="">N/A</option>
+                <option value="inside">Inside</option>
+                <option value="outside">Outside</option>
+                <option value="undetermined">Undetermined</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Source</label>
+              <select id="na-source">
+                <option>LinkedIn</option>
+                <option>Recruiter</option>
+                <option>Direct</option>
+                <option>Reed</option>
+                <option>Adzuna</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="lbl">Visa sponsorship needed</label>
+              <select id="na-visa">
+                <option value="">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Recruiter name</label>
+              <input type="text" id="na-recruiter" placeholder="Optional" />
+            </div>
+            <div class="field">
+              <label class="lbl">Recruiter contact</label>
+              <input type="text" id="na-recruiter-contact" placeholder="Email or phone" />
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl">Stage detail</label>
+            <input type="text" id="na-stage-detail" placeholder="e.g. 1st stage booked 14 Jun" />
+          </div>
+          <div class="field">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+              <label class="lbl" style="margin-bottom:0">CV variant used</label>
+              <span style="font-size:11px;color:var(--navy);cursor:pointer;text-decoration:underline" onclick="toggleCVInput()">
+                <span id="na-cv-toggle-label">paste / upload instead</span>
+              </span>
+            </div>
+            <!-- Mode A: dropdown -->
+            <div id="na-cv-mode-select">
+              <select id="na-cv-variant">
+                <option value="">— select —</option>
+                <option>CV_NagaSowjanya_AIDeveloper_v2.tex</option>
+                <option>CV_NagaSowjanya_JavaContract.tex</option>
+                <option>CV_NagaSowjanya_KGEngineer.tex</option>
+                <option>CV_NagaSowjanya_MLEngineer.tex</option>
+                <option>CV_NagaSowjanya_Researcher.tex</option>
+              </select>
+            </div>
+            <!-- Mode B: name + file/paste -->
+            <div id="na-cv-mode-custom" style="display:none">
+              <input type="text" id="na-cv-custom-name" placeholder="Filename, e.g. CV_NS_SkyTech.tex" style="margin-bottom:6px" />
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <label class="btn btn-sm" style="cursor:pointer;margin:0">
+                  Upload .tex
+                  <input type="file" id="na-cv-file" accept=".tex,.txt" style="display:none" onchange="onCVFileUpload(this)" />
+                </label>
+                <span style="font-size:11px;color:var(--muted)">or paste below</span>
+              </div>
+              <textarea id="na-cv-latex" rows="4" style="font-family:monospace;font-size:11px;line-height:1.5" placeholder="Paste LaTeX here..."></textarea>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Next action</label>
+              <input type="text" id="na-next-action" placeholder="e.g. Await feedback" />
+            </div>
+            <div class="field">
+              <label class="lbl">By date</label>
+              <input type="date" id="na-next-date" />
+            </div>
+          </div>
+        </div>
+        <!-- Right: JD + notes, stretched to match left panel height -->
+        <div style="display:flex;flex-direction:column;gap:1rem;height:100%">
+          <div class="field" style="flex:3;display:flex;flex-direction:column">
+            <label class="lbl">Job Description</label>
+            <textarea id="na-jd" style="flex:1;min-height:320px;font-size:12px;line-height:1.6;resize:none" placeholder="Paste the full JD here — stored for interview prep"></textarea>
+          </div>
+          <div class="field" style="flex:1;display:flex;flex-direction:column">
+            <label class="lbl">Notes</label>
+            <textarea id="na-notes" style="flex:1;min-height:100px;font-size:12px;line-height:1.6;resize:none" placeholder="Initial impressions, questions, context..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div id="na-error" class="alert alert-err" style="display:none;margin-top:1rem"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
+        <button class="btn" onclick="closeNewAppForm()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveNewApplication()">Save application</button>
+      </div>
+    </div>
+
     <!-- Application detail drawer -->
-    <div id="tracker-drawer" style="display:none;position:fixed;top:0;right:0;width:440px;height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 24px rgba(0,0,0,.08);z-index:1001;overflow-y:auto;padding:1.25rem">
+    <div id="tracker-drawer" style="display:none;position:fixed;top:0;right:0;width:480px;height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 24px rgba(0,0,0,.08);z-index:1001;overflow-y:auto;padding:1.25rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <div style="font-size:15px;font-weight:600;color:var(--navy)" id="drawer-title">Application</div>
         <button class="btn btn-sm btn-ghost" onclick="closeTrackerDrawer()">✕</button>
@@ -684,6 +864,17 @@
 
     <div id="out-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="out-msg">Generating...</span></div>
     <div id="out-area" style="display:none">
+      <!-- Change log (shown when tailored from Fit Analysis) -->
+      <div id="out-change-log-section" style="display:none;margin-bottom:1.25rem">
+        <div style="font-size:13px;font-weight:600;color:var(--teal);margin-bottom:6px">Changes made</div>
+        <ol id="out-change-log" style="padding-left:1.4rem;font-size:12px;line-height:2;color:var(--text)"></ol>
+      </div>
+      <!-- Omitted gaps (shown when tailored from Fit Analysis) -->
+      <div id="out-omitted-section" style="display:none;margin-bottom:1.25rem">
+        <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:4px">Gaps omitted</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">The following had no confirmed evidence and were not added to your CV. Address them before applying or accept them as gaps.</div>
+        <ol id="out-omitted-gaps" style="padding-left:1.4rem;font-size:12px;line-height:2;color:var(--text)"></ol>
+      </div>
       <div class="metrics" id="out-metrics"></div>
       <div class="out-tabs">
         <div class="out-tab active" onclick="switchOut('cv')">CV preview</div>
@@ -706,6 +897,106 @@
       </div>
     </div>
     <div id="out-empty" style="color:var(--muted);font-size:13px;padding:3rem 0">Nothing generated yet — go to Tailor CV and click Generate.</div>
+  </div>
+
+  <!-- FIT ANALYSIS -->
+  <div id="panel-fitanalysis" class="panel">
+    <div class="panel-title">Fit Analysis</div>
+    <div class="panel-sub">Map your CV to a job description. Evidence-graded requirements, bullet rewrites, score, and hiring manager verdict.</div>
+
+    <div id="fa-input-section">
+      <div class="field">
+        <label class="lbl">Your CV (plain text)</label>
+        <textarea id="fa-cv-text" style="min-height:140px" placeholder="Paste your CV as plain text..."></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl">Job description</label>
+        <textarea id="fa-jd-text" style="min-height:120px" placeholder="Paste the full job description..."></textarea>
+      </div>
+      <div id="fa-err" class="alert alert-err" style="display:none"></div>
+      <div class="row-end">
+        <button class="btn btn-primary" onclick="runFitAnalysisFull()">Analyse fit ↗</button>
+      </div>
+    </div>
+
+    <div id="fa-loading" class="loading-row" style="display:none"><div class="spinner"></div><span>Analysing — extracting requirements, rewriting bullets, scoring...</span></div>
+
+    <!-- Clarifying questions interstitial -->
+    <div id="fa-clarify-section" style="display:none">
+      <div class="alert alert-info">Before showing results, a few quick questions to improve the rewrites:</div>
+      <div id="fa-questions-list"></div>
+      <div class="row-end">
+        <button class="btn btn-primary" onclick="submitFitClarifications()">Submit &amp; continue →</button>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="fa-results" style="display:none">
+
+      <!-- Requirements table -->
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Requirements map</div>
+      <div id="fa-req-table"></div>
+
+      <!-- Before/after bullets -->
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Rewritten bullets</div>
+      <div id="fa-bullets"></div>
+
+      <!-- Score breakdown -->
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Fit score</div>
+      <div id="fa-score-breakdown"></div>
+
+      <!-- Missing terms -->
+      <div id="fa-missing-section" style="display:none;margin-top:1rem">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--red)">Missing critical/high-priority requirements</div>
+        <div id="fa-missing-tags" class="tag-row"></div>
+      </div>
+
+      <!-- Safe edits -->
+      <div id="fa-safe-edits-section" style="display:none;margin-top:1rem">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--teal)">Safe edits — evidence-bound reframings</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Every suggestion below uses only language already present in your CV. No invented numbers.</div>
+        <ol id="fa-safe-edits-list" style="padding-left:1.4rem;font-size:13px;line-height:2"></ol>
+      </div>
+
+      <!-- Evidence needed -->
+      <div id="fa-evidence-needed-section" style="display:none;margin-top:1rem">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--amber)">Evidence needed — genuine gaps</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">These are experience gaps, not presentation gaps. Address them before applying or note them as honest omissions.</div>
+        <ol id="fa-evidence-needed-list" style="padding-left:1.4rem;font-size:13px;line-height:2"></ol>
+      </div>
+
+      <!-- Verdict -->
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Hiring manager verdict</div>
+      <div id="fa-verdict"></div>
+
+      <!-- Phase 5 — tailor handoff -->
+      <div id="fa-tailor-handoff" style="display:none;margin-top:1.5rem">
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_showEvidenceNeededInterstitial()">Tailor CV for this role →</button>
+          <button class="btn btn-sm btn-danger" onclick="resetFitAnalysis()">Not a good fit — back to search</button>
+        </div>
+      </div>
+      <div id="fa-tailor-loading" class="loading-row" style="display:none"><div class="spinner"></div><span>Tailoring CV — applying rewrites...</span></div>
+
+      <div class="row-end" style="margin-top:1rem">
+        <button class="btn btn-sm btn-ghost" onclick="resetFitAnalysis()">← New analysis</button>
+      </div>
+    </div>
+
+    <!-- Evidence needed interstitial (Phase 5) -->
+    <div id="fa-evidence-interstitial" style="display:none">
+      <div class="alert alert-info" style="margin-bottom:1rem">Before tailoring, confirm any experience you have for these gaps. Leave blank to omit them from the CV.</div>
+      <div id="fa-ev-needed-checklist"></div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn btn-sm" onclick="continueWithoutEvidence()">Continue with what I have</button>
+        <button class="btn btn-primary btn-sm" onclick="submitEvidenceAndTailor()">I've answered above — tailor now →</button>
+      </div>
+    </div>
   </div>
 
 </main>
