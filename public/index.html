@@ -185,30 +185,20 @@
     <h1>CV Fit Studio</h1>
     <p>Powered by Claude</p>
   </div>
-  <div class="nav-item active" onclick="switchTab('strategy')" id="nav-strategy">
-    <span class="nav-icon">🎯</span> Role Strategy
-  </div>
-  <div class="nav-item" onclick="switchTab('live')" id="nav-live">
-    <span class="nav-icon">🌐</span> Live Search
-  </div>
-  <div class="nav-item" onclick="switchTab('discover')" id="nav-discover">
-    <span class="nav-icon">📝</span> Manual JD
-  </div>
-  <div class="nav-item" onclick="switchTab('shortlist')" id="nav-shortlist">
-    <span class="nav-icon">📋</span> Shortlist
-    <span class="nav-badge" id="sl-badge" style="display:none">0</span>
-  </div>
-  <div class="nav-item" onclick="switchTab('tailor')" id="nav-tailor">
-    <span class="nav-icon">✏️</span> Tailor CV
+  <div class="nav-item active" onclick="switchTab('discover')" id="nav-discover">
+    <span class="nav-icon">📝</span> New Job
   </div>
   <div class="nav-item" onclick="switchTab('output')" id="nav-output">
-    <span class="nav-icon">📄</span> Output
+    <span class="nav-icon">📄</span> Generated CV
   </div>
   <div class="nav-item" onclick="switchTab('fitanalysis')" id="nav-fitanalysis">
     <span class="nav-icon">🔬</span> Fit Analysis
   </div>
   <div class="nav-item" onclick="switchTab('applications')" id="nav-applications">
     <span class="nav-icon">📨</span> Applications
+  </div>
+  <div class="nav-item" onclick="switchTab('profile')" id="nav-profile">
+    <span class="nav-icon">👤</span> Profile
   </div>
   <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">
     <span class="nav-icon">⚙️</span> Settings
@@ -220,6 +210,94 @@
 
 <!-- ═══ MAIN ═══ -->
 <main class="main">
+
+  <!-- PROFILE EDITOR -->
+  <div id="panel-profile" class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="panel-title" style="margin-bottom:0">Profile</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="profileExportJS()">Export profile.js</button>
+        <button class="btn btn-primary btn-sm" onclick="profileSave()">Save profile</button>
+      </div>
+    </div>
+    <div class="panel-sub">Your CV data. Saved locally — used for all tailoring and fit analysis.</div>
+    <div id="profile-save-status" class="alert alert-ok" style="display:none;margin-bottom:1rem"></div>
+
+    <!-- Personal -->
+    <div class="card mb1">
+      <div class="card-title" style="margin-bottom:.75rem">Personal details</div>
+      <div class="grid2">
+        <div class="field"><label class="lbl">Full name</label><input type="text" id="pf-name" /></div>
+        <div class="field"><label class="lbl">Location</label><input type="text" id="pf-location" /></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lbl">Email</label><input type="text" id="pf-email" /></div>
+        <div class="field"><label class="lbl">Phone</label><input type="text" id="pf-phone" /></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lbl">LinkedIn URL</label><input type="text" id="pf-linkedin" /></div>
+        <div class="field"><label class="lbl">GitHub URL</label><input type="text" id="pf-github" /></div>
+      </div>
+    </div>
+
+    <!-- Experience -->
+    <div class="card mb1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="card-title" style="margin-bottom:0">Experience</div>
+        <button class="btn btn-sm" onclick="profileAddExperience()">+ Add role</button>
+      </div>
+      <div id="pf-experience-list"></div>
+    </div>
+
+    <!-- Projects -->
+    <div class="card mb1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="card-title" style="margin-bottom:0">Projects</div>
+        <button class="btn btn-sm" onclick="profileAddProject()">+ Add project</button>
+      </div>
+      <div id="pf-projects-list"></div>
+    </div>
+
+    <!-- Publications -->
+    <div class="card mb1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="card-title" style="margin-bottom:0">Publications</div>
+        <button class="btn btn-sm" onclick="profileAddPublication()">+ Add publication</button>
+      </div>
+      <div id="pf-publications-list"></div>
+    </div>
+
+    <!-- Education -->
+    <div class="card mb1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="card-title" style="margin-bottom:0">Education</div>
+        <button class="btn btn-sm" onclick="profileAddEducation()">+ Add education</button>
+      </div>
+      <div id="pf-education-list"></div>
+    </div>
+
+    <!-- Skills -->
+    <div class="card mb1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="card-title" style="margin-bottom:0">Skills</div>
+        <button class="btn btn-sm" onclick="profileAddSkillCategory()">+ Add category</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">One skill per line within each category.</div>
+      <div id="pf-skills-list"></div>
+    </div>
+
+    <!-- Certifications -->
+    <div class="card mb1">
+      <div class="card-title" style="margin-bottom:.5rem">Certifications</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:.5rem">One certification per line.</div>
+      <textarea id="pf-certifications" rows="4" style="font-size:12px;line-height:1.6" placeholder="e.g. AWS Solutions Architect&#10;Professional Scrum Master (PSM I)"></textarea>
+    </div>
+
+    <div class="row-end">
+      <button class="btn btn-sm" onclick="profileExportJS()">Export profile.js</button>
+      <button class="btn btn-primary" onclick="profileSave()">Save profile</button>
+    </div>
+  </div>
 
   <!-- SETTINGS -->
   <div id="panel-settings" class="panel">
@@ -248,98 +326,6 @@
     </div>
   </div>
 
-  <!-- STRATEGY -->
-  <div id="panel-strategy" class="panel active">
-    <div class="panel-title">Role strategy</div>
-    <div class="panel-sub">Your 5 target tracks — ranked by genuine fit to your profile.</div>
-
-    <div class="profile-banner">
-      <div class="avatar">NS</div>
-      <div style="flex:1">
-        <div style="font-size:15px;font-weight:600">Naga Sowjanya Barla</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6">
-          13 yrs exp · Liverpool, UK · MSc Data Science &amp; AI (University of Liverpool, 2026)
-        </div>
-        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
-          <span class="badge badge-navy">KG-RAG Dissertation</span>
-          <span class="badge badge-muted">Java · Python · RDF/SPARQL · RAG · LLMs</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="insight ok" style="margin-bottom:1.25rem">
-      Your strongest differentiator is rare: a published ESWC paper + KG-RAG dissertation + 13 years production engineering. Most AI engineers lack the research depth; most researchers lack the engineering scale. Lead with this gap in every application.
-    </div>
-
-    <div class="role-grid" id="role-cards"></div>
-
-    <div id="role-detail" style="display:none">
-      <div class="divider"></div>
-      <div id="role-detail-content"></div>
-      <div class="row-end">
-        <button class="btn btn-primary btn-sm" onclick="switchTab('discover')">Find jobs for this track →</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- LIVE SEARCH -->
-  <div id="panel-live" class="panel">
-    <div class="panel-title">Live job search</div>
-    <div class="panel-sub">Real postings from Reed and Adzuna — click any role to apply, or shortlist it to tailor your CV.</div>
-
-    <div class="field">
-      <label class="lbl">Role track</label>
-      <div class="pill-row" id="live-track-pills"></div>
-    </div>
-
-    <div class="grid2 mb1">
-      <div class="field">
-        <label class="lbl">Keywords</label>
-        <input type="text" id="live-keywords" placeholder="e.g. knowledge graph engineer" />
-      </div>
-      <div class="field">
-        <label class="lbl">Location</label>
-        <input type="text" id="live-location" value="UK" placeholder="e.g. London, Manchester, UK" />
-      </div>
-    </div>
-    <div class="grid2 mb1">
-      <div class="field">
-        <label class="lbl">Posted within</label>
-        <select id="live-recency">
-          <option value="3">Last 3 days</option>
-          <option value="7" selected>Last 7 days</option>
-          <option value="14">Last 14 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="0">Any time</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="lbl">Results per source</label>
-        <select id="live-results-n">
-          <option value="10" selected>10 per source</option>
-          <option value="20">20 per source</option>
-          <option value="30">30 per source</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row-end mb1">
-      <button class="btn btn-sm" onclick="switchTab('discover')">+ Paste custom JD</button>
-      <button class="btn btn-primary" onclick="runLiveSearch()">Search Reed + Adzuna ↗</button>
-    </div>
-
-    <div id="live-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="live-msg">Searching Reed and Adzuna...</span></div>
-    <div id="live-error" class="alert alert-err" style="display:none"></div>
-    <div id="live-counts" class="alert alert-info" style="display:none"></div>
-
-    <div id="live-results" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-        <strong id="live-title">Results</strong>
-        <button class="btn btn-sm" onclick="switchTab('shortlist')">View shortlist →</button>
-      </div>
-      <div class="job-grid" id="live-job-cards"></div>
-    </div>
-  </div>
 
   <!-- APPLICATIONS -->
   <div id="panel-applications" class="panel">
@@ -665,204 +651,160 @@
     display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:999;
   "></div>
 
-  <!-- DISCOVER -->
-  <div id="panel-discover" class="panel">
-    <div class="panel-title">Manual JD</div>
-    <div class="panel-sub">Paste any job description — from a company website, email, or anywhere — to score and tailor your CV for it.</div>
+  <!-- NEW JOB -->
+  <div id="panel-discover" class="panel active">
+    <div class="panel-title">New Job</div>
+    <div class="panel-sub">Paste a job URL or description — extract details, then tailor your CV in one step.</div>
 
-    <div id="jd-trigger-panel" style="margin-bottom:1.5rem;padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
-      <div style="font-weight:600;font-size:13px;margin-bottom:.5rem">Paste a job description to find similar roles</div>
-      <textarea id="jd-trigger-ta" rows="5" placeholder="Paste any job description here — Claude will extract the role and find matching jobs for you..." style="width:100%;font-size:12px;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
-      <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="triggerFromJD()">Find similar jobs</button>
-        <span id="jd-trigger-msg" style="font-size:12px;color:var(--muted)"></span>
-      </div>
-    </div>
-
-    <div class="field">
-      <label class="lbl">Active role track</label>
-      <div class="pill-row" id="track-pills"></div>
-    </div>
-
-    <div class="grid2 mb1">
+    <!-- URL fetch -->
+    <div class="card mb1">
+      <div class="card-title" style="margin-bottom:.6rem">Step 1 — Paste job URL or JD</div>
       <div class="field">
-        <label class="lbl">Location preference</label>
-        <select id="loc-pref">
-          <option>UK remote or hybrid</option>
-          <option>London</option>
-          <option>Liverpool or Manchester</option>
-          <option>Edinburgh or Glasgow</option>
-          <option>Anywhere UK</option>
-          <option>EU remote</option>
-        </select>
+        <label class="lbl">Job URL (optional)</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="dsc-url" placeholder="https://linkedin.com/jobs/... or any job page URL" oninput="document.getElementById('dsc-fetch-btn').disabled=!this.value.trim()" style="flex:1" />
+          <button class="btn btn-sm btn-primary" id="dsc-fetch-btn" onclick="fetchDiscoverUrl()" disabled style="flex-shrink:0;white-space:nowrap">Fetch →</button>
+        </div>
+        <div id="dsc-fetch-status" style="font-size:11px;margin-top:4px;display:none"></div>
+        <div id="dsc-paste-fallback" style="margin-top:8px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Or paste the full page text below and extract fields automatically:</div>
+          <textarea id="dsc-page-text" rows="3" style="font-size:11px;font-family:inherit;line-height:1.5" placeholder="Paste job page text here, then click Extract →"></textarea>
+          <button class="btn btn-sm btn-primary" id="dsc-extract-btn" style="margin-top:6px" onclick="extractFromDiscoverPageText()">Extract fields →</button>
+        </div>
       </div>
       <div class="field">
-        <label class="lbl">Company type</label>
-        <select id="co-type">
-          <option>Any</option>
-          <option>Startup or scale-up</option>
-          <option>Enterprise or large org</option>
-          <option>Research lab or academia</option>
-          <option>Consultancy</option>
-          <option>NHS or public sector</option>
-        </select>
-      </div>
-    </div>
-    <div class="field">
-      <label class="lbl">Additional context</label>
-      <input type="text" id="extra-ctx" placeholder="e.g. ideally Python-first, open to contract, interested in cultural heritage or HealthTech" />
-    </div>
-
-    <div class="field">
-      <label class="lbl">Additional sources (Playwright scraping)</label>
-      <div style="display:flex;gap:16px;align-items:center;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="src-linkedin" /> LinkedIn
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="src-indeed" /> Indeed
-        </label>
-        <span style="font-size:11px;color:var(--hint)">(scraping takes 2-5 min per source)</span>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-left:8px">
-          Max jobs
-          <input type="number" id="scrape-max-results" value="20" min="1" max="100" style="width:60px;padding:2px 6px;font-size:13px;border:1px solid var(--border);border-radius:4px" />
-        </label>
+        <label class="lbl">Job Description</label>
+        <textarea id="dsc-jd" rows="6" style="font-size:12px;line-height:1.6" placeholder="Paste the full job description here (auto-filled when URL fetch succeeds)..."></textarea>
       </div>
     </div>
 
-    <div id="scrape-progress" style="display:none">
-      <div class="loading-row"><div class="spinner"></div><span id="scrape-progress-msg">Scraping...</span></div>
-      <div style="height:4px;background:#e5e7eb;border-radius:2px;margin:0 0 1rem 0">
-        <div id="scrape-progress-bar" style="height:100%;background:var(--teal);border-radius:2px;width:0%;transition:width .5s"></div>
+    <!-- Job metadata (auto-filled or manual) -->
+    <div class="card mb1">
+      <div class="card-title" style="margin-bottom:.6rem">Step 2 — Confirm job details</div>
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl">Company</label>
+          <input type="text" id="dsc-company" placeholder="Company name" />
+        </div>
+        <div class="field">
+          <label class="lbl">Job Title</label>
+          <input type="text" id="dsc-title" placeholder="e.g. Senior AI Engineer" />
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl">Location</label>
+          <input type="text" id="dsc-location" placeholder="e.g. Manchester, Remote" />
+        </div>
+        <div class="field">
+          <label class="lbl">Salary / Rate</label>
+          <input type="text" id="dsc-salary" placeholder="e.g. £65k or £540/day" />
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl">Source</label>
+          <select id="dsc-source">
+            <option>LinkedIn</option>
+            <option>Recruiter</option>
+            <option>Direct</option>
+            <option>Reed</option>
+            <option>Adzuna</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Contract type</label>
+          <select id="dsc-contract">
+            <option>Permanent</option>
+            <option>Contract</option>
+            <option>FTC</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <div class="row-end mb1">
-      <button class="btn btn-primary" onclick="discoverJobsWithScrape()">Score with Claude ↗</button>
-    </div>
-
-    <div id="disc-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="disc-msg">Searching...</span></div>
-    <div id="disc-error" class="alert alert-err" style="display:none"></div>
-
-    <div id="disc-results" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-        <strong id="disc-title">Results</strong>
-        <button class="btn btn-sm" onclick="switchTab('shortlist')">View shortlist →</button>
-      </div>
-      <div class="job-grid" id="job-cards"></div>
-    </div>
-  </div>
-
-  <!-- SHORTLIST -->
-  <div id="panel-shortlist" class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
-      <div>
-        <div class="panel-title">Shortlisted roles</div>
-        <div class="panel-sub" style="margin-bottom:0">Click a role to tailor your CV for it.</div>
-      </div>
-      <button class="btn btn-sm btn-danger" onclick="clearShortlist()">Clear all</button>
-    </div>
-    <div id="sl-empty" style="color:var(--muted);padding:2rem 0;font-size:13px">No roles shortlisted yet. Go to Job Discovery and click cards to add them.</div>
-    <div id="sl-cards"></div>
-    <div id="sl-actions" style="display:none" class="row-end">
-      <button class="btn btn-sm" onclick="switchTab('discover')">← Add more</button>
-      <button class="btn btn-sm btn-primary" onclick="switchTab('tailor')">Tailor a role →</button>
-    </div>
-  </div>
-
-  <!-- TAILOR -->
-  <div id="panel-tailor" class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div class="panel-title" style="margin-bottom:0">Tailor CV</div>
-      <a id="tailor-apply-link" href="#" target="_blank" rel="noopener"
-         style="display:none;font-size:13px;font-weight:600;color:var(--navy);text-decoration:none;padding:6px 14px;border:1px solid var(--border-strong);border-radius:var(--radius);transition:background .15s"
-         onmouseover="this.style.background='var(--navy-light)'" onmouseout="this.style.background=''">
-        Apply for this role ↗
-      </a>
-    </div>
-    <div class="panel-sub" id="tailor-role-label">Generate a role-specific CV and cover letter with genuine bullet rewrites.</div>
-
-    <div class="field">
-      <label class="lbl">Select role from shortlist</label>
-      <select id="tailor-sel" onchange="onTailorSelect()">
-        <option value="">— pick from shortlist or paste a custom JD below —</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label class="lbl">Job description (auto-filled or paste your own)</label>
-      <textarea id="jd-ta" style="min-height:140px" placeholder="Paste a full job description here..."></textarea>
-    </div>
-
-    <div class="grid2 mb1">
-      <div class="field">
-        <label class="lbl">CV variant / role track</label>
-        <select id="cv-variant">
-          <option value="kg">Knowledge Graph / Semantic AI</option>
-          <option value="ai">AI / LLM Engineer</option>
-          <option value="ml">ML / Data Engineer</option>
-          <option value="java">Java / Backend Engineer</option>
-          <option value="research">AI Researcher</option>
-        </select>
-      </div>
+    <!-- Tailoring options -->
+    <div class="card mb1">
+      <div class="card-title" style="margin-bottom:.6rem">Step 3 — Tailoring options</div>
       <div class="field">
         <label class="lbl">Tailoring intensity</label>
-        <select id="tailor-intensity">
+        <select id="dsc-intensity">
           <option value="sharp">Sharp — rewrite bullets for max impact</option>
-          <option value="moderate">Moderate — strengthen and inject keywords</option>
+          <option value="moderate" selected>Moderate — strengthen and inject keywords</option>
           <option value="light">Light — preserve voice, minimal changes</option>
         </select>
       </div>
     </div>
 
-    <div class="grid2 mb1">
-      <div class="field">
-        <label class="lbl">Cover letter</label>
-        <select id="want-cover">
-          <option value="yes">Yes — include cover letter</option>
-          <option value="cover-only">Cover letter only</option>
-          <option value="no">No</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="lbl">Cover letter tone</label>
-        <select id="cover-tone">
-          <option value="professional">Professional</option>
-          <option value="research-confident">Research-confident</option>
-          <option value="startup-direct">Startup-direct</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="field">
-      <label class="lbl">Emphasis notes</label>
-      <input type="text" id="emph-notes" value="lead with KG-RAG research; TCS shows scale but don't let it dominate; quantify wherever possible" />
-    </div>
-
-    <div id="tailor-err" class="alert alert-err" style="display:none"></div>
-
-    <div id="fit-section" style="display:none">
-      <div class="divider"></div>
-      <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:.75rem">Fit analysis</div>
-      <div class="metrics" id="fit-metrics"></div>
-      <div id="fit-detail"></div>
-      <div class="divider"></div>
-    </div>
-
-    <div id="tailor-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="tailor-msg">Working...</span></div>
-
-    <div class="row-between">
-      <button class="btn btn-sm" onclick="runFitAnalysis()">Analyse fit first</button>
-      <button class="btn btn-primary" onclick="generateCV()">Generate tailored CV ↗</button>
+    <div id="dsc-error" class="alert alert-err" style="display:none"></div>
+    <div class="row-end">
+      <button class="btn btn-primary" onclick="tailorFromDiscover()">Tailor CV →</button>
     </div>
   </div>
 
-  <!-- OUTPUT -->
+
+  <!-- hidden inputs kept for JS compatibility -->
+  <select id="cv-variant" style="display:none"><option value="kg">kg</option><option value="ai">ai</option><option value="ml">ml</option><option value="java">java</option><option value="research">research</option></select>
+  <select id="tailor-intensity" style="display:none"><option value="sharp">sharp</option><option value="moderate" selected>moderate</option><option value="light">light</option></select>
+  <select id="want-cover" style="display:none"><option value="no">no</option></select>
+  <select id="cover-tone" style="display:none"><option value="professional">professional</option></select>
+  <input type="text" id="emph-notes" style="display:none" value="lead with KG-RAG research; TCS shows scale but don't let it dominate; quantify wherever possible" />
+  <textarea id="jd-ta" style="display:none"></textarea>
+
+  <!-- GENERATED CV -->
   <div id="panel-output" class="panel">
-    <div class="panel-title">Output</div>
-    <div class="panel-sub">Your tailored CV, cover letter, plain text and LaTeX — ready to use.</div>
+    <div class="panel-title">Generated CV</div>
+    <div class="panel-sub">Review changes, finalize, download PDF, and track your application.</div>
 
     <div id="out-loading" class="loading-row" style="display:none"><div class="spinner"></div><span id="out-msg">Generating...</span></div>
+
+    <!-- Fit analysis step — shown before tailoring -->
+    <div id="out-fit" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--navy)">Fit Analysis</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Review how your profile maps to this role before tailoring.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('out-fit').style.display='none';switchTab('discover')">← Back</button>
+          <button class="btn btn-primary btn-sm" onclick="generateFromFit()">Generate CV with this analysis →</button>
+        </div>
+      </div>
+      <!-- Score bar -->
+      <div id="fit-score-row" style="margin-bottom:1.25rem"></div>
+      <!-- Requirements table -->
+      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:.5rem">Requirements</div>
+      <div id="fit-req-table" style="margin-bottom:1.25rem"></div>
+      <!-- Gaps -->
+      <div id="fit-gaps-row" style="margin-bottom:1.25rem"></div>
+      <!-- Verdict -->
+      <div id="fit-verdict-row" style="margin-bottom:1.25rem"></div>
+      <div class="row-end">
+        <button class="btn btn-primary" onclick="generateFromFit()">Generate CV with this analysis →</button>
+      </div>
+    </div>
+
+    <!-- Delta review — shown between generation and finalize -->
+    <div id="out-delta" style="display:none">
+      <!-- Top action bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--navy)">Review changes</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Approve or reject each change. Edit the "After" text before finalizing.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-sm" onclick="deltaApproveAll()">✓ Approve all</button>
+          <button class="btn btn-sm btn-danger" onclick="deltaRejectAll()">✗ Reject all</button>
+          <button class="btn btn-primary btn-sm" onclick="finalizeFromDelta()">Finalize &amp; PDF →</button>
+        </div>
+      </div>
+      <div id="delta-cards"></div>
+      <div class="row-between" style="margin-top:1.25rem">
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('out-delta').style.display='none';switchTab('discover')">← Back to job</button>
+        <button class="btn btn-primary" onclick="finalizeFromDelta()">Finalize &amp; Generate PDF →</button>
+      </div>
+    </div>
     <div id="out-area" style="display:none">
       <!-- Change log (shown when tailored from Fit Analysis) -->
       <div id="out-change-log-section" style="display:none;margin-bottom:1.25rem">
@@ -878,7 +820,6 @@
       <div class="metrics" id="out-metrics"></div>
       <div class="out-tabs">
         <div class="out-tab active" onclick="switchOut('cv')">CV preview</div>
-        <div class="out-tab" id="cover-tab-btn" onclick="switchOut('cover')">Cover letter</div>
         <div class="out-tab" onclick="switchOut('plain')">Plain text</div>
         <div class="out-tab" onclick="switchOut('latex')">LaTeX</div>
       </div>
@@ -887,14 +828,49 @@
       <div id="out-plain" class="out-box mono" style="display:none"></div>
       <div id="out-latex" class="out-box mono" style="display:none"></div>
       <div class="row-between" style="margin-top:1rem">
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm" onclick="copyText('out-plain')">Copy plain text</button>
           <button class="btn btn-sm" onclick="copyText('out-latex')">Copy LaTeX</button>
           <button class="btn btn-sm" onclick="downloadLatex()">Download .tex</button>
           <button class="btn btn-sm btn-primary" onclick="downloadPDF()" id="pdf-btn">Download PDF</button>
         </div>
-        <button class="btn btn-sm btn-primary" onclick="switchTab('tailor')">← Adjust &amp; regenerate</button>
+        <button class="btn btn-sm btn-primary" onclick="switchTab('discover')">← New job</button>
       </div>
+        <!-- On-demand cover letter -->
+        <div id="cover-letter-section" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+            <div style="font-size:13px;font-weight:600;color:var(--navy)">Cover Letter</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <select id="cl-tone" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+                <option value="professional">Professional</option>
+                <option value="research-confident">Research-confident</option>
+                <option value="startup-direct">Startup-direct</option>
+              </select>
+              <button class="btn btn-sm btn-ghost" id="cl-regen-btn" onclick="generateCoverLetterOnDemand(true)" style="display:none">↻ Regenerate</button>
+            </div>
+          </div>
+          <div id="cl-loading" class="loading-row" style="display:none"><div class="spinner"></div><span style="font-size:12px">Drafting cover letter...</span></div>
+          <!-- Letter preview (formatted) -->
+          <div id="cl-preview" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:2rem;font-size:13px;line-height:1.9;font-family:'Georgia',serif;color:var(--text);margin-bottom:.75rem;min-height:300px"></div>
+          <!-- Raw editable textarea (toggled) -->
+          <textarea id="cl-output-ta" style="display:none;width:100%;min-height:300px;font-size:13px;line-height:1.8;padding:1.25rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);color:var(--text);resize:vertical;font-family:'Georgia',serif"></textarea>
+          <div id="cl-actions" style="display:none;margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-sm" id="cl-edit-btn" onclick="_toggleCLEdit()">Edit</button>
+            <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('cl-output-ta').value)">Copy text</button>
+            <button class="btn btn-sm" onclick="_downloadCLText()">Download .txt</button>
+            <button class="btn btn-sm btn-primary" onclick="_downloadCLPDF()">Download PDF</button>
+          </div>
+        </div>
+        <!-- Generate cover letter trigger (shown when no cover letter yet) -->
+        <div id="cover-letter-trigger" style="display:none;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+          <button class="btn btn-sm" onclick="generateCoverLetterOnDemand(false)">+ Generate Cover Letter</button>
+        </div>
+        <!-- Mark as applied row -->
+        <div id="mark-applied-row" style="display:none;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted);flex:1">Ready to apply?</span>
+          <button class="btn btn-sm btn-primary" onclick="markAsApplied()" id="mark-applied-btn">Mark as Applied → Save to Tracker</button>
+          <span id="mark-applied-status" style="font-size:12px;display:none"></span>
+        </div>
     </div>
     <div id="out-empty" style="color:var(--muted);font-size:13px;padding:3rem 0">Nothing generated yet — go to Tailor CV and click Generate.</div>
   </div>

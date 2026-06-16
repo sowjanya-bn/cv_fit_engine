@@ -1,41 +1,34 @@
-# CV Fit Studio
+# CV Fit Engine
 
-A local web app for role-aware CV tailoring, job discovery, and cover letter generation — powered by Claude.
+A local web app for role-aware CV tailoring, job discovery, cover letter generation, and job application automation — powered by Claude.
 
-Built around Sowjanya's profile but easily adapted (edit `public/profile.js`).
+Built around Sowjanya's profile but easily adapted (edit `data/profile.yaml`).
 
 ---
 
 ## Quick start
 
-### 1. Clone / unzip the project
-
-```bash
-cd cv-fit-studio
-```
-
-### 2. Install dependencies
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
+playwright install chromium
 ```
 
-### 3. Set your Anthropic API key
+### 2. Set your Anthropic API key
 
 **Option A — `.env` file (recommended):**
 ```bash
 cp .env.example .env
-# then edit .env and paste your key
+# edit .env and paste your key
 ```
 
 **Option B — environment variable:**
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-your-key-here   # Mac/Linux
-set ANTHROPIC_API_KEY=sk-ant-your-key-here       # Windows CMD
-$env:ANTHROPIC_API_KEY="sk-ant-your-key-here"    # PowerShell
 ```
 
-### 4. Run
+### 3. Run
 
 ```bash
 python run.py
@@ -48,31 +41,29 @@ Open **http://localhost:8000** in your browser.
 ## Project structure
 
 ```
-cv-fit-studio/
-├── run.py              ← start the app
+cv_fit_engine/
+├── run.py                      ← start the app
 ├── requirements.txt
 ├── .env.example
+├── data/
+│   ├── profile.yaml            ← YOUR resume data (edit this!)
+│   ├── jobs_cache.json         ← scraped job cache
+│   └── runs/                   ← generated CV/cover letter output
 ├── src/
-│   └── app.py          ← FastAPI backend (proxies Claude API calls)
-└── public/
-    ├── index.html      ← single-page UI
-    ├── profile.js      ← YOUR resume data (edit this!)
-    └── app.js          ← all UI logic
+│   └── app.py                  ← FastAPI backend
+└── src/cvfitengine/
+    ├── apply/
+    │   ├── cover_letter.py     ← cover letter generation
+    │   ├── linkedin_apply.py   ← LinkedIn Easy Apply automation
+    │   └── queue.py            ← application queue
+    ├── scoring/
+    │   ├── score.py            ← CV-to-JD fit scoring
+    │   └── gaps.py             ← skill gap analysis
+    ├── scrapers/
+    │   ├── cache.py            ← job cache
+    │   └── ...                 ← job board scrapers (LinkedIn, etc.)
+    └── sponsor_checker.py      ← visa sponsor eligibility checker
 ```
-
----
-
-## Customising for your profile
-
-Edit `public/profile.js` — it's plain JavaScript with your full resume structured as:
-
-- `PROFILE.experience[]` — each role with bullets and tags
-- `PROFILE.projects[]` — projects with bullets
-- `PROFILE.skills{}` — skill categories
-- `PROFILE.education[]` — degrees
-- `ROLES[]` — the 5 target tracks with fit scores and strategy text
-
-All other logic in `app.js` reads from `PROFILE` and `ROLES`.
 
 ---
 
@@ -80,33 +71,25 @@ All other logic in `app.js` reads from `PROFILE` and `ROLES`.
 
 | Tab | What it does |
 |-----|-------------|
-| **Role Strategy** | Shows 5 target tracks with honest fit scores and employer targets |
-| **Job Discovery** | Claude generates 8 realistic, scored job listings per track |
-| **Shortlist** | Save jobs you like; quick-tailor from here |
-| **Tailor CV** | Role-aware CV generation with genuine bullet rewrites + fit analysis |
+| **Role Strategy** | Shows target tracks with honest fit scores and employer targets |
+| **Job Discovery** | Scrapes and scores real job listings; filter by recency |
+| **Shortlist** | Save jobs across buckets (priority / tactical-only); quick-tailor from here |
+| **Tailor CV** | Role-aware CV generation with bullet rewrites + fit analysis |
+| **Cover Letter** | Generates tailored cover letters per job with gap analysis |
+| **Apply** | LinkedIn Easy Apply automation queue |
 | **Output** | CV preview, cover letter, plain text (copy-paste), LaTeX download |
-| **Settings** | API key status check |
 
 ---
 
-## Why local?
+## Customising for your profile
 
-- API key stays server-side — never in the browser
-- You own your data — nothing leaves except the Claude API calls
-- Works offline for everything except generation
-- Easy to extend with your existing `cvfitengine` Python code
+Edit `data/profile.yaml` — structured as:
 
----
-
-## Integrating with your existing cvfitengine
-
-The LaTeX output from the Output tab is structurally compatible with your existing `cv.tex.j2` template. You can:
-
-1. Download the `.tex` file from the Output tab
-2. Drop it into your `data/runs/` directory
-3. Compile with your existing `pdf.py` renderer
-
-Or import `cvfitengine` scoring directly into `src/app.py` to add tag-based re-ranking on top of the LLM output.
+- `experience[]` — each role with bullets and tags
+- `projects[]` — projects with bullets
+- `skills{}` — skill categories
+- `education[]` — degrees
+- `target_roles[]` — target tracks with strategy text
 
 ---
 
@@ -114,6 +97,8 @@ Or import `cvfitengine` scoring directly into `src/app.py` to add tag-based re-r
 
 **"API key not set"** — check `.env` has `ANTHROPIC_API_KEY=sk-ant-...` with no quotes or spaces.
 
-**Slow generation** — normal; Claude is writing a full CV. The `max_tokens=4096` setting gives it room to produce quality output.
+**Slow generation** — normal; Claude is writing a full CV + cover letter.
 
 **Port already in use** — change the port in `run.py`: `uvicorn.run(..., port=8001)`.
+
+**LinkedIn apply not working** — run `playwright install chromium` and ensure you have a valid LinkedIn session saved.

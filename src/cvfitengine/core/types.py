@@ -16,6 +16,11 @@ class Bullet(BaseModel):
     kind: BulletKind = "other"
     metrics: List[str] = Field(default_factory=list)
     tags: BulletTags = Field(default_factory=BulletTags)
+    # Evidence and rewrite metadata (Phase 1 enrichment)
+    evidence: Optional[str] = None
+    allowed_strength: Optional[str] = "moderate"   # strong | moderate | weak
+    rewrite_allowed: bool = False
+    title_relevance: List[str] = Field(default_factory=list)
 
 class BlockTags(BaseModel):
     skills: List[str] = Field(default_factory=list)
@@ -34,6 +39,19 @@ class ExperienceBlock(BaseModel):
     summary: Optional[str] = ""
     bullets: List[Bullet] = Field(default_factory=list)
     tags: BlockTags = Field(default_factory=BlockTags)
+    # Title strategy metadata (Phase 1 enrichment)
+    official_title: Optional[str] = None
+    market_title: Optional[str] = None
+    title_basis: Optional[str] = None
+
+class PublicationBlock(BaseModel):
+    id: str
+    title: str
+    venue: Optional[str] = ""
+    year: Optional[str] = ""
+    authors: Optional[str] = ""
+    links: List[str] = Field(default_factory=list)
+    notes: Optional[str] = ""
 
 class ProjectBlock(BaseModel):
     id: str
@@ -95,11 +113,30 @@ class Blocks(BaseModel):
     experience: List[ExperienceBlock] = Field(default_factory=list)
     projects: List[ProjectBlock] = Field(default_factory=list)
     education: List[EducationBlock] = Field(default_factory=list)
+    publications: List[PublicationBlock] = Field(default_factory=list)
+
+class IncludeExclude(BaseModel):
+    experience: List[str] = Field(default_factory=list)
+    projects: List[str] = Field(default_factory=list)
+
+class IncludeRule(BaseModel):
+    role_key: str
+    include: IncludeExclude = Field(default_factory=IncludeExclude)
+    exclude: IncludeExclude = Field(default_factory=IncludeExclude)
+
+class SummaryVariant(BaseModel):
+    role_key: str
+    summary_id: str
+
+class Variants(BaseModel):
+    summary_by_role: List[SummaryVariant] = Field(default_factory=list)
+    include_rules: List[IncludeRule] = Field(default_factory=list)
 
 class ResumeForm(BaseModel):
     resume_schema_version: int = 1
     profile: Profile
     blocks: Blocks
+    variants: Optional[Variants] = None
 
 class JobSpec(BaseModel):
     raw_text: str

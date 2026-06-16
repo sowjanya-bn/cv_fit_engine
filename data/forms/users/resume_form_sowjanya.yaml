@@ -13,246 +13,357 @@ profile:
       website: ''
   headlines:
   - id: headline_primary
-    text: AI Engineer
+    text: Senior Software Engineer | Backend Platforms & AI Systems
   summaries:
   - id: summary_primary
-    text: AI Engineer with 13 years of experience building secure, enterprise-grade
-      software systems. Strong background in distributed services and API-led design,
-      with recent focus on LLM-powered applications, knowledge-graph-backed architectures
-      and Retrieval-Augmented Generation pipelines. Experienced in designing, evaluating
-      and deploying AI systems with an emphasis on reliability, traceability and production
-      integration.
+    text: Senior software engineer with 13 years of production backend experience
+      across distributed platforms, API design, observability and reliability. Now
+      applying that engineering depth to applied AI systems, with hands-on research
+      and implementation experience in RAG, LLM orchestration, knowledge-graph-backed
+      retrieval and evaluation frameworks. Published ESWC 2026 researcher with a strong
+      Java/Spring Boot and Python background, able to translate research ideas into
+      reliable, testable and production-minded systems.
   skills:
     categories:
-      - name: Languages
+      - name: Applied AI
         items:
-          - Python
-          - Java
-          - SQL
-
-      - name: Frameworks
-        items:
-          - Spring Boot
-          - FastAPI
-
-      - name: Data/ML
-        items:
-          - Retrieval-Augmented Generation
-          - Large Language Models
-          - Natural Language Processing
-          - Knowledge Graphs
-          - Machine Learning
+          - RAG
+          - KG-RAG
+          - LLM orchestration
+          - knowledge-graph-backed retrieval
+          - conversational AI
+          - evaluation frameworks
+          - NLP
+          - prompt engineering
           - SHAP
           - XGBoost
 
-      - name: Cloud/DevOps
-        items:
-          - AWS
-          - CI/CD
-          - Docker
-          - Monitoring
-
-      - name: Tools
+      - name: Semantic Web
         items:
           - RDF
           - SPARQL
+          - ontology modelling
+          - knowledge graphs
+
+      - name: Backend Engineering
+        items:
+          - Java
+          - Spring Boot
+          - Spring WebFlux
+          - Python
+          - FastAPI
+          - REST APIs
+          - distributed systems
+          - Apache Camel
+          - MuleSoft
+          - Apigee
+          - microservices
+          - event-driven systems
+
+      - name: Cloud & Infrastructure
+        items:
+          - AWS
+          - Docker
+          - Kafka
           - Elasticsearch
+          - Redis
+          - MySQL
+          - SQL
+          - CI/CD
           - Git
-  interests: Interests include practical AI-enabled tools, enterprise system design
-    and applied machine learning.
+
+  interests: ''
   certifications:
-  - AI Consulting Micro Internship (Springpod)
+  - TM Forum Frameworx Foundation (eTOM, SID and TAM)
+  - Professional Scrum Master (PSM I), Scrum.org
   - Oracle Certified Java Programmer
   - Oracle Certified Java EE Web Component Developer
+
 blocks:
   experience:
-  - id: exp_002
-    role: 'Summer Research Intern : AI \& Knowledge Graphs'
+  - id: exp_001
+    role: AI Research Engineer
+    official_title: AI Research Engineer
+    market_title: AI Research Engineer
+    title_basis: Designing and building a knowledge-graph-grounded conversational AI
+      system for museum human-robot interaction; published at ESWC 2026
     company: University of Liverpool
     location: United Kingdom
-    start: '2025'
-    end: '2025'
+    start: '2026-04'
+    end: present
     employment_type: ''
     summary: ''
     bullets:
     - id: b_0001
-      text: Built Python-based LLM pipelines for structured metadata extraction.
+      text: Designing and building a voice-controlled, knowledge-graph-grounded conversational
+        AI system for museum human-robot interaction, integrating RAG, SPARQL retrieval,
+        LLM orchestration and embodied dialogue.
       kind: impact
       metrics: []
+      evidence: exp_001
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0002
-      text: Modelled and queried knowledge graphs using RDF and SPARQL.
+      text: Architecting a layered system that separates real-time interaction, semantic
+        reasoning, evidence validation and response planning, with explicit handling
+        of uncertainty, conflicting evidence and provenance-heavy answers.
       kind: impact
       metrics: []
+      evidence: exp_001
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0003
-      text: Evaluated AI-assisted workflows using defined quality and consistency
-        metrics.
+      text: Implementing coordination logic to manage latency trade-offs, clarification
+        decisions and transitions between fast conversational responses and slower
+        KG-RAG reasoning steps.
       kind: impact
       metrics: []
+      evidence: exp_001
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0004
-      text: Worked with structured datasets using Python and query-based retrieval,
-        validating data consistency and completeness.
+      text: Evaluating KG-RAG configurations against factual grounding, response latency
+        and conversational smoothness to inform production-minded design decisions.
       kind: impact
       metrics: []
-    - id: b_0005
-      text: Implemented checks to ensure data quality and correctness across extracted
-        and generated outputs.
-      kind: impact
-      metrics: []
+      evidence: exp_001
+      allowed_strength: strong
+      rewrite_allowed: true
     tags:
-        skills: [rag, llm, knowledge-graphs, nlp, data-quality, evaluation]
-        tools: [python, rdf, sparql]
-        domain: [research, cultural-heritage]
-        seniority: [research]
+      skills: [rag, kg-rag, llm-orchestration, knowledge-graphs, sparql, evaluation,
+        conversational-ai]
+      tools: [python, rdf, sparql]
+      domain: [research, cultural-heritage, human-robot-interaction]
+      seniority: [research, senior]
+
+  - id: exp_002
+    role: Research Intern
+    official_title: Research Intern
+    market_title: AI Research Engineer
+    title_basis: Built LLM pipelines, modelled RDF knowledge graphs, designed evaluation
+      workflows for KG-RAG configurations
+    company: University of Liverpool
+    location: United Kingdom
+    start: '2025-06'
+    end: '2025-07'
+    employment_type: ''
+    summary: ''
+    bullets:
+    - id: b_0001
+      text: Built Python LLM pipelines for structured metadata extraction, entity
+        and event modelling, relationship extraction and provenance capture from cultural
+        heritage records.
+      kind: impact
+      metrics: []
+      evidence: exp_002
+      allowed_strength: strong
+      rewrite_allowed: true
+    - id: b_0002
+      text: Modelled RDF knowledge graphs and developed SPARQL query patterns to support
+        grounded retrieval, evidence-backed generation and narrative consistency checks.
+      kind: impact
+      metrics: []
+      evidence: exp_002
+      allowed_strength: strong
+      rewrite_allowed: true
+    - id: b_0003
+      text: Designed evaluation workflows for grounding, retrieval coverage, latency
+        and narrative quality across KG-RAG, Hybrid RAG and Graph RAG configurations.
+      kind: impact
+      metrics: []
+      evidence: exp_002
+      allowed_strength: strong
+      rewrite_allowed: true
+    - id: b_0004
+      text: Ran reproducible experiments comparing retrieval strategies and LLM backends,
+        translating findings into practical pipeline design decisions.
+      kind: impact
+      metrics: []
+      evidence: exp_002
+      allowed_strength: strong
+      rewrite_allowed: true
+    tags:
+      skills: [rag, llm, knowledge-graphs, evaluation, sparql, rdf]
+      tools: [python, rdf, sparql]
+      domain: [research, cultural-heritage]
+      seniority: [research]
+
   - id: exp_003
-    role: Programmer
+    role: Senior Backend Engineer
+    official_title: Programmer
+    market_title: Senior Backend Engineer
+    title_basis: Built production APIs and distributed pipelines, led engineering
+      team, architected observability and reliability systems at scale
     company: Tata Consultancy Services
     location: United Kingdom
-    start: '2022'
-    end: '2025'
+    start: '2019-04'
+    end: '2025-02'
     employment_type: ''
     summary: ''
     bullets:
     - id: b_0001
-      text: Developed and maintained large-scale SIP-based telecom platforms.
+      text: Built production REST APIs and distributed data replication pipelines
+        for large-scale SIP telephony platforms, supporting high-volume provisioning
+        workflows with strong consistency guarantees across geographically separated
+        datacentres.
       kind: impact
       metrics: []
+      evidence: exp_003
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0002
-      text: Designed high-performance APIs for provisioning and network management.
+      text: Designed Apigee API gateway proxies and enterprise service integrations
+        using Apache Camel and MuleSoft, enforcing OAuth2, rate-limiting and reliable
+        asynchronous message exchange across multi-region infrastructure.
       kind: impact
       metrics: []
+      evidence: exp_003
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0003
-      text: Engineered distributed data replication pipelines across multiple regions.
+      text: Led a cross-functional engineering team delivering backend systems for
+        telecom platforms, coordinating design, development, testing and production
+        support across a multi-year programme.
       kind: impact
       metrics: []
+      evidence: exp_003
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0004
-      text: Built secure gateway services with access control for regulated environments.
+      text: Architected Elasticsearch-based observability and alerting capabilities,
+        improving diagnosis of service failures and driving reliability improvements
+        including fault isolation and graceful degradation patterns.
       kind: impact
       metrics: []
+      evidence: exp_003
+      allowed_strength: strong
+      rewrite_allowed: true
+    - id: b_0005
+      text: Supported GDPR-related data retention, access review and audit logging
+        across production systems, translating compliance requirements into technical
+        implementation plans.
+      kind: impact
+      metrics: []
+      evidence: exp_003
+      allowed_strength: strong
+      rewrite_allowed: true
     tags:
-      skills: [distributed-systems, api-design, backend-development, data-pipelines]
-      tools: [java, python]
+      skills: [distributed-systems, api-design, backend-development, observability,
+        reliability, gdpr]
+      tools: [java, python, apigee, apache-camel, mulesoft, elasticsearch]
       domain: [telecom, enterprise]
-      seniority: [mid-level]
+      seniority: [senior, lead]
+
   - id: exp_004
-    role: Development Team Lead
+    role: Backend Systems Engineer
+    official_title: IT Analyst / System Engineer
+    market_title: Backend Systems Engineer
+    title_basis: Delivered full-stack telecom provisioning systems, migrated workflow
+      platforms, built fault isolation POC using graph traversal
     company: Tata Consultancy Services
-    location: United Kingdom
-    start: '2019'
-    end: '2022'
+    location: India / Norway / UK
+    start: '2011-07'
+    end: '2019-03'
     employment_type: ''
     summary: ''
     bullets:
     - id: b_0001
-      text: Led delivery of scalable backend systems in cross-functional teams.
+      text: Designed and delivered full-stack network provisioning systems in Java
+        for large-scale telecom platforms, integrating OSS/BSS components across end-to-end
+        service activation workflows.
       kind: impact
       metrics: []
+      evidence: exp_004
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0002
-      text: Improved system reliability and performance through structured troubleshooting.
+      text: Migrated legacy work-order management systems to jBPM-orchestrated workflows,
+        reducing order-to-activation cycle times and improving operational throughput.
       kind: impact
       metrics: []
+      evidence: exp_004
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0003
-      text: Used Elasticsearch for monitoring, analytics and operational insight.
+      text: Built a fault isolation proof-of-concept using network topology graph
+        traversal, enabling faster and more precise root-cause diagnosis for field
+        engineers.
       kind: impact
       metrics: []
+      evidence: exp_004
+      allowed_strength: strong
+      rewrite_allowed: true
     - id: b_0004
-      text: Worked with large operational datasets, focusing on accuracy, consistency,
-        and reliability of data used in production systems.
+      text: Supported GDPR data retention audits and implemented automated purge workflows
+        across multiple production systems, alongside system testing and performance
+        tuning to maintain production SLAs.
       kind: impact
       metrics: []
+      evidence: exp_004
+      allowed_strength: moderate
+      rewrite_allowed: true
     tags:
-      skills: [backend-architecture, system-design, reliability, performance-optimization, api-design]
-      tools: [java, elasticsearch]
+      skills: [backend-development, provisioning-systems, workflow-design, compliance,
+        graph-traversal]
+      tools: [java, jbpm]
       domain: [telecom, enterprise]
-      seniority: [lead]
-  - id: exp_005
-    role: IT Analyst
-    company: Tata Consultancy Services, India
-    location: Hyderabad
-    start: '2015'
-    end: '2019'
-    employment_type: ''
-    summary: ''
-    bullets:
-    - id: b_0001
-      text: Automated workflow and work-order management systems.
-      kind: impact
-      metrics: []
-    - id: b_0002
-      text: Built proof-of-concept fault-handling solutions for network platforms.
-      kind: impact
-      metrics: []
-    - id: b_0003
-      text: Updated data retention processes to support GDPR-aligned compliance.
-      kind: impact
-      metrics: []
-    tags:
-      skills: [automation, workflow-design, compliance, data-governance]
-      tools: []
-      domain: [telecom, enterprise]
-      seniority: [early-career]
-  - id: exp_006
-    role: Assistant System Engineer → System Engineer
-    company: Tata Consultancy Services, India
-    location: Hyderabad
-    start: '2011'
-    end: '2015'
-    employment_type: ''
-    summary: ''
-    bullets:
-    - id: b_0001
-      text: Developed provisioning systems across front-end and back-end components.
-      kind: impact
-      metrics: []
-    - id: b_0002
-      text: Supported service activation workflows through testing and troubleshooting.
-      kind: impact
-      metrics: []
-    tags:
-      skills: [backend-development, provisioning-systems, testing, troubleshooting]
-      tools: [java]
-      domain: [telecom, enterprise]
-      seniority: [early-career]
+      seniority: [early-career, mid-level]
+
   education:
   - id: edu_001
     degree: MSc Data Science and Artificial Intelligence
     institution: University of Liverpool, United Kingdom
-    location: ''
+    location: Liverpool, UK
     start: ''
-    end: ''
-    grade: ''
+    end: '2026'
+    grade: Distinction
     modules: []
     notes: 'Dissertation: RAG-based Digital Storytelling on Music Knowledge Graphs'
   - id: edu_002
     degree: B.E. Electronics and Communication Engineering
     institution: GITAM University, India
-    location: ''
+    location: India
     start: ''
-    end: ''
+    end: '2011'
     grade: ''
     modules: []
     notes: ''
 
-
-
   publications:
   - id: pub_001
-    title: "Competency Questions as Executable Plans: a Controlled RAG Architecture for Cultural Heritage Storytelling"
+    title: 'Competency Questions as Executable Plans: A Controlled RAG Architecture
+      for Cultural Heritage Storytelling'
     venue: European Semantic Web Conference (ESWC 2026)
     year: '2026'
-    authors: Naga Sowjanya Barla
+    authors: Barla, N.S., de Berardinis, J.
     links:
       - https://doi.org/10.1007/978-3-032-25156-5_25
-    notes: Published by Springer.
+    notes: 'In: Acosta, M., et al. The Semantic Web. Lecture Notes in Computer Science,
+      vol 16549. Springer, Cham.'
+
+  projects:
+  - id: proj_001
+    title: Stock Price ML Analysis
+    bullets:
+    - id: pb_0001
+      text: Engineered features from OHLCV data, earnings surprises and news sentiment
+        to predict pre-market price movement using XGBoost, applying SHAP analysis
+        to interpret feature importance and identify key predictors.
+
 variants:
   _help: Optional. Define role-specific versions without editing the base blocks.
   summary_by_role:
   - role_key: ai_engineer
     summary_id: summary_primary
+  - role_key: backend_engineer
+    summary_id: summary_primary
+  - role_key: kg_curator
+    summary_id: summary_primary
   include_rules:
   - role_key: ai_engineer
     include:
-      experience: []
-      projects: []
+      experience: [exp_001, exp_002, exp_003, exp_004]
+      projects: [proj_001]
     exclude:
       experience: []
       projects: []

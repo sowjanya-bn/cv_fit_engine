@@ -42,6 +42,12 @@ class RewrittenBullet:
     flag: str | None  # warning note if inferred
 
 @dataclass
+class BlockedRewrite:
+    original: str
+    reason: Literal["missing_evidence", "unsupported_claim"]
+    detail: str  # human-readable explanation, e.g. "No basis for '40% uplift' in CV text"
+
+@dataclass
 class FitScore:
     keyword_match: int       # 0-100
     skills_match: int
@@ -51,7 +57,8 @@ class FitScore:
     recruiter_readability: int
     overall: int
     missing_high_priority: list[str]
-    actions_to_80: list[str]
+    safe_edits: list[str]      # reframings of evidence already in the CV — no invented numbers or outcomes
+    evidence_needed: list[str] # gaps the candidate must confirm with real experience before applying
 
 @dataclass
 class HiringManagerVerdict:
@@ -63,8 +70,9 @@ class HiringManagerVerdict:
 @dataclass
 class AlignmentMap:
     requirements: list[Requirement]
-    clarifying_questions: list[str]   # max 3
+    clarifying_questions: list[str]      # max 3
     rewritten_bullets: list[RewrittenBullet]
+    blocked_rewrites: list[BlockedRewrite]  # surfaced as gaps in UI, never silently dropped
     score: FitScore
     verdict: HiringManagerVerdict
 ```
@@ -156,7 +164,7 @@ def rewrite_bullets(
     cv_text: str,
     requirements: list[Requirement],
     clarifications: dict[str, str] | None = None
-) -> list[RewrittenBullet]:
+) -> tuple[list[RewrittenBullet], list[BlockedRewrite]]:
     """
     Rewrite bullets from cv_text that map to requirements with
     evidence_state in ('stated', 'inferred').
@@ -165,11 +173,13 @@ def rewrite_bullets(
       - must use employer's language from requirements
       - must not invent metrics not present in cv_text or clarifications
       - evidence_state of output bullet must be 'stated' or 'inferred' only
-      - if rewrite would require fabrication, return original with flag
+      - if rewrite would require fabrication, produce a BlockedRewrite instead
+    Returns a tuple: (rewritten_bullets, blocked_rewrites).
+    Nothing is silently dropped — every bullet either rewrites or blocks.
     """
 ```
 
-Post-generation validation: after the model returns rewrites, check each against the original CV text. If the rewritten bullet contains a metric or claim with no basis in `cv_text` or `clarifications`, set `evidence_state = "unsupported"` and revert to original.
+Post-generation validation: after the model returns rewrites, check each against `cv_text` and `clarifications`. If a rewritten bullet contains a metric or claim with no traceable basis, do not return a `RewrittenBullet` for it. Instead produce a `BlockedRewrite` with `reason="unsupported_claim"` and a `detail` string naming the specific unsupported element. The type contract is then clean: `RewrittenBullet.evidence_state` is always `"stated"` or `"inferred"`, never anything else.
 
 ### Task 2-2 — New backend endpoint `POST /api/align/rewrite`
 
@@ -182,12 +192,17 @@ class RewriteRequest(BaseModel):
 class RewriteResponse(BaseModel):
     clarifying_questions: list[str]
     rewritten_bullets: list[RewrittenBullet]
+    blocked_rewrites: list[BlockedRewrite]
 
 @app.post("/api/align/rewrite", response_model=RewriteResponse)
 async def align_rewrite(req: RewriteRequest):
     questions = generate_clarifying_questions(req.requirements, req.cv_text)
-    bullets = rewrite_bullets(req.cv_text, req.requirements, req.clarifications)
-    return RewriteResponse(clarifying_questions=questions, rewritten_bullets=bullets)
+    bullets, blocked = rewrite_bullets(req.cv_text, req.requirements, req.clarifications)
+    return RewriteResponse(
+        clarifying_questions=questions,
+        rewritten_bullets=bullets,
+        blocked_rewrites=blocked,
+    )
 ```
 
 **Test:** Pass a requirement with `evidence_state = "missing"`. Confirm no rewritten bullet is returned for it — only a gap flag.
@@ -223,10 +238,23 @@ def score_alignment(
     missing_high_priority — requirements ranked 'critical' or 'high'
                             with evidence_state 'missing'
 
-    actions_to_80 — concrete, specific steps. Not generic advice.
-                    e.g. "Add 'stakeholder management' to your Senior PM
-                    role bullet — it appears 4 times in the JD and is absent
-                    from your CV"
+    safe_edits — reframings of evidence already present in the CV.
+                 Constraint: every word in a safe_edit must be traceable to
+                 cv_text. No invented numbers, team sizes, percentages, tool
+                 names, or outcomes. If you cannot write the suggestion without
+                 inventing a detail, it is not a safe edit.
+                 e.g. "In your Team Lead role, replace 'delivered backend
+                 systems' with 'delivered scalable backend systems on time'
+                 — the JD uses 'on time' 3 times and this phrasing is already
+                 in your CV."
+
+    evidence_needed — gaps the candidate must address with real experience.
+                      Frame as a question or honest disclosure, never as a
+                      ready-to-paste bullet with invented metrics.
+                      e.g. "AI Agent experience: the role requires designing
+                      and building production agents. If you have built one,
+                      add it. If not, this is a genuine gap to address before
+                      applying."
     """
 ```
 
@@ -249,7 +277,7 @@ async def align_score(req: ScoreRequest):
     )
 ```
 
-**Test:** Score a CV against a JD where the candidate's seniority is clearly mismatched. Confirm `seniority_fit` is below 50 and `actions_to_80` contains a specific seniority-related action, not a generic one.
+**Test:** Score a CV against a JD where the candidate's seniority is clearly mismatched. Confirm `seniority_fit` is below 50. Confirm `safe_edits` contains no invented numbers. Confirm `evidence_needed` frames the seniority gap as a candidate question, not a suggested bullet.
 
 ---
 
@@ -296,7 +324,7 @@ async def align_full(req: FullAlignRequest):
 
     # Module 2: rewrite
     questions = generate_clarifying_questions(requirements, req.cv_text)
-    bullets = rewrite_bullets(req.cv_text, requirements, req.clarifications)
+    bullets, blocked = rewrite_bullets(req.cv_text, requirements, req.clarifications)
 
     # Module 3: score
     score = score_alignment(req.cv_text, req.jd_text, requirements, bullets)
@@ -309,6 +337,7 @@ async def align_full(req: FullAlignRequest):
             requirements=requirements,
             clarifying_questions=questions,
             rewritten_bullets=bullets,
+            blocked_rewrites=blocked,
             score=score,
             verdict=verdict,
         )
@@ -324,10 +353,12 @@ In `public/app.js`, add a new tab panel "Fit Analysis" that:
 3. If `clarifying_questions` is non-empty, shows them as an interstitial form before rendering results — collect answers and resubmit with `clarifications` populated
 4. Renders the full `AlignmentMap`:
    - Requirements table: rank | requirement | importance | evidence state badge | CV evidence
-   - Before/after bullets (only for `stated` and `inferred` — gaps shown separately)
+   - Before/after bullets (only `RewrittenBullet` entries — `stated` and `inferred`)
+   - Blocked rewrites shown separately as a gap list: original bullet + reason + detail
    - Six-dimension score breakdown with overall percentage
    - Missing high-priority terms as tags
-   - Actions to 80% as a numbered list
+   - Safe edits as a numbered list (evidence-bound reframings only)
+   - Evidence needed as a separate list (candidate questions, not suggested bullets)
    - Hiring manager verdict with interview decision, biggest doubt, fix
 
 Evidence state badges: `stated` = green, `inferred` = amber with tooltip "based on inference — verify before interview", `missing` = red, `unsupported` = red with strikethrough.
@@ -379,11 +410,11 @@ In `public/index.html`, add the Fit Analysis tab to the nav alongside Role Strat
 | Scenario | Expected behaviour |
 |---|---|
 | Skill clearly absent from CV | `evidence_state = "missing"`, no rewritten bullet produced |
-| Metric in rewrite not in CV | `evidence_state = "unsupported"`, original bullet returned with flag |
+| Metric in rewrite not in CV | `BlockedRewrite` returned with `reason="unsupported_claim"`, `detail` names the specific metric; no `RewrittenBullet` produced |
 | Inferred experience | `evidence_state = "inferred"`, rewrite produced, amber badge in UI |
 | Clarifying questions returned | Interstitial form shown before results render |
 | Clarifications submitted | Re-call includes `clarifications` dict, bullets improve |
-| Seniority mismatch | `seniority_fit` < 50, `actions_to_80` contains seniority-specific action |
+| Seniority mismatch | `seniority_fit` < 50; `evidence_needed` frames gap as candidate question; `safe_edits` contains no invented numbers |
 | All requirements met | `overall` score ≥ 75, `missing_high_priority` empty |
 | Full pipeline | `POST /api/align/full` returns all four modules in one response |
 | Frontend render | All four result sections render; badges colour-coded by evidence state |

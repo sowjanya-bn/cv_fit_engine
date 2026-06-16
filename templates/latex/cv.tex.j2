@@ -152,6 +152,15 @@
 
 {% endfor %}
 
+{% if publications and (publications | length) > 0 %}
+\section*{Publications}
+{% for pub in publications %}
+\noindent {{ pub.authors | default("") }}{% if pub.year %} ({{ pub.year }}){% endif %}. \textit{ {{ pub.title }} }.{% if pub.venue %} {{ pub.venue }}.{% endif %}{% if pub.notes %} {{ pub.notes }}.{% endif %}
+{% if pub.links and (pub.links | length) > 0 %}\href{ {{- pub.links[0] | trim -}} }{ {{- pub.links[0] | trim -}} }\par{% endif %}
+\vspace{4pt}
+{% endfor %}
+{% endif %}
+
 {% if projects and (projects | length) > 0 %}
 \section*{Projects}
 {% for prj in projects %}

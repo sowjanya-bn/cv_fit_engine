@@ -19,6 +19,29 @@ SCREENSHOTS_DIR = Path.home() / ".cvfit" / "screenshots"
 _pending_sessions: dict[str, object] = {}
 
 
+def check_plan_approved(job_id: str, plans_dir: str = "plans/") -> tuple[bool, str]:
+    """Return (approved, reason). Application must not proceed unless approved=True."""
+    import json
+    from pathlib import Path
+
+    plans = Path(plans_dir)
+    slug = job_id.replace("/", "_").replace(" ", "_")
+    plan_file = plans / f"tailoring_plan_{slug}.json"
+
+    if not plan_file.exists():
+        return False, f"No tailoring plan found for job_id '{job_id}'. Run planning/tailoring_plan.py first."
+
+    try:
+        data = json.loads(plan_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        return False, f"Could not read tailoring plan: {e}"
+
+    status = data.get("approval_status", "pending")
+    if status == "approved":
+        return True, "Plan approved."
+    return False, f"Tailoring plan exists but approval_status is '{status}'. Review and set to 'approved' before applying."
+
+
 async def apply_easy(
     job: dict,
     resume,
@@ -37,6 +60,11 @@ async def apply_easy(
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     job_id = _field(job, "id")
     job_url = _field(job, "url") or _field(job, "apply_url")
+
+    # Gate: require an approved tailoring plan before proceeding
+    approved, reason = check_plan_approved(job_id)
+    if not approved:
+        return {"status": "blocked", "screenshot_path": "", "error": reason}
 
     if not job_url:
         return {"status": "failed", "screenshot_path": "", "error": "No job URL"}

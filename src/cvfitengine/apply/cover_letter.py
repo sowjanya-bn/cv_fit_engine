@@ -66,10 +66,12 @@ def _call_anthropic(job: dict, resume, score_result: dict) -> str:
 
     system_prompt = (
         "You are an expert cover letter writer. Write concise, compelling cover letters "
-        "in exactly 3 paragraphs. Never start with 'I am writing to apply'. "
+        "in exactly 3 paragraphs separated by a blank line. Never start with 'I am writing to apply'. "
         "Lead with the candidate's most relevant differentiator. "
         "Frame missing skills as areas of active learning or adjacent expertise. "
-        "Return ONLY the cover letter text — no salutation, no sign-off, no markdown."
+        "Return ONLY the cover letter body — no salutation, no sign-off, no markdown, no bullet points. "
+        "Each paragraph must be separated by exactly one blank line (\\n\\n). "
+        "Do NOT run paragraphs together."
     )
 
     user_prompt = f"""Write a cover letter for:
@@ -83,7 +85,14 @@ Seniority signal: {seniority}
 Profile summary:
 {_profile_summary(resume)}
 
-3 paragraphs only. ~250 words total. Specific, not generic."""
+Rules:
+- Exactly 3 paragraphs
+- Separate each paragraph with a blank line
+- ~80-90 words per paragraph (~250 words total)
+- Paragraph 1: open with the strongest differentiator specific to this role
+- Paragraph 2: connect specific experience/projects to the job requirements
+- Paragraph 3: motivation for this company + forward-looking close
+- Specific, not generic."""
 
     payload = {
         "model": "claude-haiku-4-5-20251001",
@@ -106,9 +115,21 @@ Profile summary:
         if resp.status_code != 200:
             return f"[Cover letter generation failed: {resp.status_code}]"
         data = resp.json()
-        return "".join(b.get("text", "") for b in data.get("content", [])).strip()
+        text = "".join(b.get("text", "") for b in data.get("content", [])).strip()
+        return _ensure_paragraph_breaks(text)
     except Exception as e:
         return f"[Cover letter generation error: {e}]"
+
+
+def _ensure_paragraph_breaks(text: str) -> str:
+    """Normalise paragraph breaks — collapse excess blank lines, ensure 3 paragraphs."""
+    import re
+    # Normalise Windows line endings
+    text = text.replace("\r\n", "\n")
+    # Collapse 3+ blank lines to 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    return "\n\n".join(paragraphs)
 
 
 def _field(job, key: str) -> str:

@@ -10,42 +10,42 @@ default:
 ai_engineer:
   # Core narrative: applied AI + KG/RAG + production backend maturity
   required_experience_ids:
-    - exp_002  # UoL AI & Knowledge Graphs
-    - exp_004  # Team lead / reliability / ops
-    - exp_003  # Distributed systems / APIs
-  # Dynamic anchors (used for ordering + score boost). These do not remove blocks,
-  # they only change emphasis based on JD type.
+    - exp_001  # AI Research Engineer (current)
+    - exp_002  # Research Intern — KG-RAG, evaluation
+    - exp_003  # Senior Backend Engineer — distributed systems, APIs
   anchor_sets:
     ai_first:
+      - exp_001
       - exp_002
-      - exp_003
     eng_first:
-      - exp_004
       - exp_003
+      - exp_001
   required_project_ids:
-    - proj_001  # KG-RAG dissertation
+    - proj_001  # Stock Price ML Analysis
   min_experience_blocks: 3
-  min_project_blocks: 2
+  min_project_blocks: 1
 
 backend_engineer:
   required_experience_ids:
-    - exp_004
-    - exp_003
+    - exp_003  # Senior Backend Engineer
+    - exp_004  # Backend Systems Engineer
   required_project_ids:
-    - proj_003
+    - proj_001
   min_experience_blocks: 2
   min_project_blocks: 1
 
 data_scientist:
   required_experience_ids:
+    - exp_001
     - exp_002
   required_project_ids:
-    - proj_002
+    - proj_001
   min_experience_blocks: 2
   min_project_blocks: 1
 
 research_engineer:
   required_experience_ids:
+    - exp_001
     - exp_002
   required_project_ids:
     - proj_001

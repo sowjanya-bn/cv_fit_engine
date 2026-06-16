@@ -13,7 +13,7 @@ const PROFILE = {
 
   education: [
     {
-      degree: "MSc Data Science and Artificial Intelligence",
+      degree: "MSc Data Science and Artificial Intelligence (Distinction)",
       inst: "University of Liverpool, UK",
       year: "2026",
       note: "Dissertation: RAG-based Digital Storytelling on Music Knowledge Graphs"
@@ -26,111 +26,92 @@ const PROFILE = {
   ],
 
   skills: {
-    "Languages":   ["Python", "Java", "SQL"],
-    "Frameworks":  ["Spring Boot", "Spring WebFlux", "FastAPI", "Apache Camel", "MuleSoft"],
-    "AI / ML":     ["Retrieval-Augmented Generation", "LLMs", "Knowledge Graphs", "NLP",
-                    "Machine Learning", "SHAP", "XGBoost", "Prompt Engineering"],
-    "Semantic Web":["RDF", "SPARQL", "Ontology Modelling", "Schema.org", "Music Meta"],
-    "Data / Infra":["Elasticsearch", "Kafka", "MySQL", "Redis", "Docker", "AWS", "CI/CD", "Git"],
-    "Integration": ["Apigee", "API Gateways", "HAProxy", "Microservices", "Event-driven systems"]
+    "Applied AI":         ["RAG", "KG-RAG", "LLM orchestration", "knowledge-graph-backed retrieval", "conversational AI", "evaluation frameworks", "NLP", "prompt engineering", "SHAP", "XGBoost"],
+    "Semantic Web":       ["RDF", "SPARQL", "ontology modelling", "knowledge graphs"],
+    "Backend Engineering":["Java", "Spring Boot", "Spring WebFlux", "Python", "FastAPI", "REST APIs", "distributed systems", "Apache Camel", "MuleSoft", "Apigee", "microservices", "event-driven systems"],
+    "Cloud & Infrastructure": ["AWS", "Docker", "Kafka", "Elasticsearch", "Redis", "MySQL", "SQL", "CI/CD", "Git"]
   },
 
   certifications: [
-    "AI Consulting Micro Internship (Springpod)",
+    "TM Forum Frameworx Foundation (eTOM, SID and TAM)",
+    "Professional Scrum Master (PSM I), Scrum.org",
     "Oracle Certified Java Programmer",
     "Oracle Certified Java EE Web Component Developer"
   ],
 
   experience: [
     {
-      id: "e2",
-      role: "Summer Research Intern — AI & Knowledge Graphs",
-      co: "University of Liverpool",
+      id: "exp_001",
+      role: "AI Research Engineer",
+      co: "University of Liverpool, UK",
+      dates: "Apr 2026–Present",
+      bullets: [
+        "Designing and building a voice-controlled, knowledge-graph-grounded conversational AI system for museum human-robot interaction, integrating RAG, SPARQL retrieval, LLM orchestration and embodied dialogue.",
+        "Architecting a layered system that separates real-time interaction, semantic reasoning, evidence validation and response planning, with explicit handling of uncertainty, conflicting evidence and provenance-heavy answers.",
+        "Implementing coordination logic to manage latency trade-offs, clarification decisions and transitions between fast conversational responses and slower KG-RAG reasoning steps.",
+        "Evaluating KG-RAG configurations against factual grounding, response latency and conversational smoothness to inform production-minded design decisions."
+      ],
+      tags: ["rag", "kg-rag", "llm-orchestration", "knowledge-graphs", "sparql", "evaluation", "conversational-ai", "python", "rdf"]
+    },
+    {
+      id: "exp_002",
+      role: "Research Intern",
+      co: "University of Liverpool, UK",
       dates: "Jun–Jul 2025",
       bullets: [
-        "Built Python LLM pipelines for structured metadata extraction from semi-structured data sources.",
-        "Modelled and queried knowledge graphs using RDF and SPARQL for grounded, structured retrieval.",
-        "Developed evaluation frameworks to assess consistency, grounding, and reliability of AI-generated outputs.",
-        "Designed reproducible workflows comparing retrieval strategies; analysed trade-offs to optimise pipeline performance."
+        "Built Python LLM pipelines for structured metadata extraction, entity and event modelling, relationship extraction and provenance capture from cultural heritage records.",
+        "Modelled RDF knowledge graphs and developed SPARQL query patterns to support grounded retrieval, evidence-backed generation and narrative consistency checks.",
+        "Designed evaluation workflows for grounding, retrieval coverage, latency and narrative quality across KG-RAG, Hybrid RAG and Graph RAG configurations.",
+        "Ran reproducible experiments comparing retrieval strategies and LLM backends, translating findings into practical pipeline design decisions."
       ],
-      tags: ["rag", "llm", "knowledge-graphs", "nlp", "evaluation", "python", "rdf", "sparql"]
+      tags: ["rag", "llm", "knowledge-graphs", "evaluation", "sparql", "rdf", "python", "research"]
     },
     {
-      id: "e3",
-      role: "Programmer",
+      id: "exp_003",
+      role: "Senior Backend Engineer",
       co: "Tata Consultancy Services, UK",
-      dates: "Apr 2022–Feb 2025",
+      dates: "Apr 2019–Feb 2025",
       bullets: [
-        "Developed and maintained large-scale SIP-based telephony platforms serving millions of subscribers.",
-        "Designed high-performance REST APIs for telecom provisioning and network management using Spring Boot.",
-        "Engineered distributed data replication pipelines across geographically separated nodes with strong consistency guarantees.",
-        "Integrated MuleSoft and Apache Camel workflows for reliable data exchange across enterprise service boundaries.",
-        "Built secure Apigee gateway proxies exposing network capabilities to internal and external consumers.",
-        "Prototyped Python data tooling and early AI-adjacent analytics features in production environments."
+        "Built production REST APIs and distributed data replication pipelines for large-scale SIP telephony platforms, supporting high-volume provisioning workflows with strong consistency guarantees across geographically separated datacentres.",
+        "Designed Apigee API gateway proxies and enterprise service integrations using Apache Camel and MuleSoft, enforcing OAuth2, rate-limiting and reliable asynchronous message exchange across multi-region infrastructure.",
+        "Led a cross-functional engineering team delivering backend systems for telecom platforms, coordinating design, development, testing and production support across a multi-year programme.",
+        "Architected Elasticsearch-based observability and alerting capabilities, improving diagnosis of service failures and driving reliability improvements including fault isolation and graceful degradation patterns.",
+        "Supported GDPR-related data retention, access review and audit logging across production systems, translating compliance requirements into technical implementation plans."
       ],
-      tags: ["java", "spring", "api", "distributed", "backend", "python", "kafka", "apigee"]
+      tags: ["distributed-systems", "api-design", "backend-development", "observability", "reliability", "gdpr", "java", "python", "apigee", "apache-camel", "mulesoft", "elasticsearch"]
     },
     {
-      id: "e4",
-      role: "Development Team Lead",
-      co: "Tata Consultancy Services, UK",
-      dates: "Apr 2019–Apr 2022",
+      id: "exp_004",
+      role: "Backend Systems Engineer",
+      co: "Tata Consultancy Services, India / Norway / UK",
+      dates: "Jul 2011–Mar 2019",
       bullets: [
-        "Led 6-person cross-functional engineering team delivering scalable backend systems on time and within scope.",
-        "Designed Elasticsearch-based monitoring and alerting systems improving operational incident response.",
-        "Drove architectural decisions to improve system reliability, fault tolerance, and horizontal scalability.",
-        "Ensured GDPR compliance through structured data governance and retention policy implementation."
+        "Designed and delivered full-stack network provisioning systems in Java for large-scale telecom platforms, integrating OSS/BSS components across end-to-end service activation workflows.",
+        "Migrated legacy work-order management systems to jBPM-orchestrated workflows, reducing order-to-activation cycle times and improving operational throughput.",
+        "Built a fault isolation proof-of-concept using network topology graph traversal, enabling faster and more precise root-cause diagnosis for field engineers.",
+        "Supported GDPR data retention audits and implemented automated purge workflows across multiple production systems, alongside system testing and performance tuning to maintain production SLAs."
       ],
-      tags: ["lead", "architecture", "elasticsearch", "reliability", "java", "gdpr"]
-    },
-    {
-      id: "e5",
-      role: "IT Analyst",
-      co: "Tata Consultancy Services, India / Norway",
-      dates: "Jul 2015–Mar 2019",
-      bullets: [
-        "Migrated work-order management system to structured jBPM-based workflows, improving operational efficiency.",
-        "Built POC fault-handling system enabling network engineers to isolate root causes across full network topology.",
-        "Managed GDPR data retention policy review across TCS-managed systems for a major Norwegian provider."
-      ],
-      tags: ["workflow", "compliance", "java", "jbpm"]
-    },
-    {
-      id: "e6",
-      role: "System Engineer → Assistant System Engineer",
-      co: "Tata Consultancy Services, India / UK",
-      dates: "Jul 2011–Jun 2015",
-      bullets: [
-        "Designed and built full-stack network provisioning systems for a major British telecom provider.",
-        "Integrated front-end and back-end technologies to deliver seamless OSS/BSS service activation workflows.",
-        "Conducted rigorous system testing and troubleshooting to maintain production quality standards."
-      ],
-      tags: ["java", "provisioning", "fullstack", "testing"]
+      tags: ["backend-development", "provisioning-systems", "workflow-design", "compliance", "graph-traversal", "java", "jbpm"]
     }
   ],
 
   projects: [
     {
-      id: "p1",
-      title: "MSc Dissertation: Knowledge Graph RAG System",
-      bullets: [
-        "Designed end-to-end KG-first RAG pipeline for personalised narrative generation over a Live Aid knowledge base.",
-        "Built and curated 20K+ triple RDF knowledge graph using Music Meta and Schema.org ontologies.",
-        "Implemented KG-RAG, Hybrid RAG and Graph RAG retrieval strategies with comparative evaluation.",
-        "Developed Python orchestration and evaluation pipelines assessing grounding accuracy, coverage, and coherence.",
-        "Analysed retrieval-quality vs generation-performance trade-offs to inform system design and optimisation.",
-        "Published research paper accepted at ESWC 2026 (https://doi.org/10.1007/978-3-032-25156-5_25), demonstrating novel insights into KG-RAG design and evaluation. "
-      ],
-      tags: ["rag", "kg", "llm", "python", "rdf", "sparql", "evaluation", "research"]
-    },
-    {
-      id: "p3",
+      id: "proj_001",
       title: "Stock Price ML Analysis",
       bullets: [
-        "Engineered features from OHLCV, EPS surprises and news sentiment for pre-market price movement prediction.",
-        "Benchmarked XGBoost achieving ~80% accuracy; used SHAP to identify key predictive drivers."
+        "Engineered features from OHLCV data, earnings surprises and news sentiment to predict pre-market price movement using XGBoost, applying SHAP analysis to interpret feature importance and identify key predictors."
       ],
       tags: ["ml", "xgboost", "shap", "feature-engineering", "python"]
+    }
+  ],
+
+  publications: [
+    {
+      title: "Evaluating Knowledge Graph-Augmented Generation for Factual Grounding in Conversational Museum AI",
+      venue: "ESWC 2026 (Extended Semantic Web Conference)",
+      year: "2026",
+      note: "Peer-reviewed. Evaluates KG-RAG configurations for factual grounding, latency and conversational coherence in museum human-robot interaction."
     }
   ]
 };

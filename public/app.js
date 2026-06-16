@@ -10,12 +10,15 @@ let shortlist = [];
 let discoveredJobs = [];
 let activeJob = null;
 let lastOutput = null;
+let _jobMeta = {}; // holds {company, title, location, salary, source, contract, url, jd}
 
 // ── init ───────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  renderRoleCards();
-  renderTrackPills();
-  renderLiveTrackPills();
+  // Apply any saved profile from localStorage
+  try {
+    const stored = localStorage.getItem("cvfit_profile_v1");
+    if (stored) Object.assign(PROFILE, JSON.parse(stored));
+  } catch {}
   checkHealth();
   loadShortlistFromServer();
   // Pre-load resume YAML so scoring works without visiting Tailor tab
@@ -26,19 +29,323 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── tab routing ────────────────────────────────────────────────
 function switchTab(t) {
-  const tabs = ["strategy", "live", "discover", "shortlist", "tailor", "output", "applications", "settings", "fitanalysis"];
+  const tabs = ["discover", "output", "applications", "settings", "fitanalysis", "profile"];
   tabs.forEach(k => {
-    document.getElementById("panel-" + k).classList.toggle("active", k === t);
-    document.getElementById("nav-" + k).classList.toggle("active", k === t);
+    const panel = document.getElementById("panel-" + k);
+    const nav = document.getElementById("nav-" + k);
+    if (panel) panel.classList.toggle("active", k === t);
+    if (nav) nav.classList.toggle("active", k === t);
   });
-  if (t === "shortlist") renderShortlist();
-  if (t === "tailor") populateTailorSelect();
   if (t === "applications") loadTracker();
   if (t === "fitanalysis") _prefillFACv();
+  if (t === "profile") profileLoad();
   if (t === "output" && !lastOutput) {
-    document.getElementById("out-empty").style.display = "";
-    document.getElementById("out-area").style.display = "none";
+    const loading = document.getElementById("out-loading");
+    const isGenerating = loading && loading.style.display === "flex";
+    if (!isGenerating) {
+      document.getElementById("out-empty").style.display = "";
+      document.getElementById("out-area").style.display = "none";
+      document.getElementById("out-delta").style.display = "none";
+    }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Profile Editor
+// ═══════════════════════════════════════════════════════════════
+
+const PROFILE_STORAGE_KEY = "cvfit_profile_v1";
+
+function profileLoad() {
+  // Load from localStorage if available, else from PROFILE constant
+  let p;
+  try {
+    const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+    p = stored ? JSON.parse(stored) : PROFILE;
+  } catch { p = PROFILE; }
+
+  document.getElementById("pf-name").value     = p.name     || "";
+  document.getElementById("pf-location").value = p.location || "";
+  document.getElementById("pf-email").value    = p.email    || "";
+  document.getElementById("pf-phone").value    = p.phone    || "";
+  document.getElementById("pf-linkedin").value = p.linkedin || "";
+  document.getElementById("pf-github").value   = p.github   || "";
+
+  // Experience
+  const expList = document.getElementById("pf-experience-list");
+  expList.innerHTML = "";
+  (p.experience || []).forEach((e, i) => _profileRenderExp(e, i));
+
+  // Projects
+  const projList = document.getElementById("pf-projects-list");
+  projList.innerHTML = "";
+  (p.projects || []).forEach((pr, i) => _profileRenderProject(pr, i));
+
+  // Publications
+  const pubList = document.getElementById("pf-publications-list");
+  pubList.innerHTML = "";
+  (p.publications || []).forEach((pub, i) => _profileRenderPublication(pub, i));
+
+  // Education
+  const eduList = document.getElementById("pf-education-list");
+  eduList.innerHTML = "";
+  (p.education || []).forEach((e, i) => _profileRenderEducation(e, i));
+
+  // Skills
+  const skillsList = document.getElementById("pf-skills-list");
+  skillsList.innerHTML = "";
+  Object.entries(p.skills || {}).forEach(([cat, items], i) => _profileRenderSkillCategory(cat, items, i));
+
+  // Certifications
+  document.getElementById("pf-certifications").value = (p.certifications || []).join("\n");
+}
+
+function _profileRenderExp(e, i) {
+  const div = document.createElement("div");
+  div.id = `pf-exp-${i}`;
+  div.style.cssText = "border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.75rem";
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="font-size:12px;font-weight:600;color:var(--navy)">Role ${i+1}</div>
+      <button class="btn btn-sm btn-danger" onclick="_profileRemoveExp(${i})">Remove</button>
+    </div>
+    <div class="grid2">
+      <div class="field"><label class="lbl">Job title</label><input type="text" id="pf-exp-role-${i}" value="${escAttr(e.role||"")}" /></div>
+      <div class="field"><label class="lbl">Company</label><input type="text" id="pf-exp-co-${i}" value="${escAttr(e.co||"")}" /></div>
+    </div>
+    <div class="field"><label class="lbl">Dates</label><input type="text" id="pf-exp-dates-${i}" value="${escAttr(e.dates||"")}" placeholder="e.g. Jan 2022–Present" /></div>
+    <div class="field">
+      <label class="lbl">Bullets (one per line)</label>
+      <textarea id="pf-exp-bullets-${i}" rows="4" style="font-size:12px;line-height:1.6">${escAttr((e.bullets||[]).join("\n"))}</textarea>
+    </div>`;
+  document.getElementById("pf-experience-list").appendChild(div);
+}
+
+function _profileRenderProject(pr, i) {
+  const div = document.createElement("div");
+  div.id = `pf-proj-${i}`;
+  div.style.cssText = "border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.75rem";
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="font-size:12px;font-weight:600;color:var(--navy)">Project ${i+1}</div>
+      <button class="btn btn-sm btn-danger" onclick="_profileRemoveProject(${i})">Remove</button>
+    </div>
+    <div class="field"><label class="lbl">Project title</label><input type="text" id="pf-proj-title-${i}" value="${escAttr(pr.title||"")}" /></div>
+    <div class="field">
+      <label class="lbl">Bullets (one per line)</label>
+      <textarea id="pf-proj-bullets-${i}" rows="3" style="font-size:12px;line-height:1.6">${escAttr((pr.bullets||[]).join("\n"))}</textarea>
+    </div>`;
+  document.getElementById("pf-projects-list").appendChild(div);
+}
+
+function _profileRenderPublication(pub, i) {
+  const div = document.createElement("div");
+  div.id = `pf-pub-${i}`;
+  div.style.cssText = "border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.75rem";
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="font-size:12px;font-weight:600;color:var(--navy)">Publication ${i+1}</div>
+      <button class="btn btn-sm btn-danger" onclick="_profileRemovePublication(${i})">Remove</button>
+    </div>
+    <div class="field"><label class="lbl">Title</label><input type="text" id="pf-pub-title-${i}" value="${escAttr(pub.title||"")}" /></div>
+    <div class="grid2">
+      <div class="field"><label class="lbl">Venue / Conference</label><input type="text" id="pf-pub-venue-${i}" value="${escAttr(pub.venue||"")}" /></div>
+      <div class="field"><label class="lbl">Year</label><input type="text" id="pf-pub-year-${i}" value="${escAttr(pub.year||"")}" style="max-width:120px" /></div>
+    </div>
+    <div class="field"><label class="lbl">Note (optional)</label><input type="text" id="pf-pub-note-${i}" value="${escAttr(pub.note||"")}" /></div>`;
+  document.getElementById("pf-publications-list").appendChild(div);
+}
+
+function _profileRenderEducation(e, i) {
+  const div = document.createElement("div");
+  div.id = `pf-edu-${i}`;
+  div.style.cssText = "border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.75rem";
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="font-size:12px;font-weight:600;color:var(--navy)">Education ${i+1}</div>
+      <button class="btn btn-sm btn-danger" onclick="_profileRemoveEducation(${i})">Remove</button>
+    </div>
+    <div class="field"><label class="lbl">Degree / Qualification</label><input type="text" id="pf-edu-degree-${i}" value="${escAttr(e.degree||"")}" /></div>
+    <div class="grid2">
+      <div class="field"><label class="lbl">Institution</label><input type="text" id="pf-edu-inst-${i}" value="${escAttr(e.inst||"")}" /></div>
+      <div class="field"><label class="lbl">Year</label><input type="text" id="pf-edu-year-${i}" value="${escAttr(e.year||"")}" style="max-width:120px" /></div>
+    </div>
+    <div class="field"><label class="lbl">Note (optional, e.g. dissertation)</label><input type="text" id="pf-edu-note-${i}" value="${escAttr(e.note||"")}" /></div>`;
+  document.getElementById("pf-education-list").appendChild(div);
+}
+
+function _profileRenderSkillCategory(cat, items, i) {
+  const div = document.createElement("div");
+  div.id = `pf-skill-${i}`;
+  div.style.cssText = "border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.75rem";
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <input type="text" id="pf-skill-cat-${i}" value="${escAttr(cat)}" placeholder="Category name" style="font-size:12px;font-weight:600;flex:1;margin-right:8px" />
+      <button class="btn btn-sm btn-danger" onclick="_profileRemoveSkillCategory(${i})">Remove</button>
+    </div>
+    <textarea id="pf-skill-items-${i}" rows="3" style="font-size:12px;line-height:1.6;width:100%" placeholder="One skill per line">${escAttr((items||[]).join("\n"))}</textarea>`;
+  document.getElementById("pf-skills-list").appendChild(div);
+}
+
+// Add/remove helpers — re-render the whole section after mutation for simplicity
+function _profileGetCurrent() {
+  // Collect current form state into a profile object
+  const p = {
+    name:     document.getElementById("pf-name").value.trim(),
+    location: document.getElementById("pf-location").value.trim(),
+    email:    document.getElementById("pf-email").value.trim(),
+    phone:    document.getElementById("pf-phone").value.trim(),
+    linkedin: document.getElementById("pf-linkedin").value.trim(),
+    github:   document.getElementById("pf-github").value.trim(),
+    experience: [], projects: [], publications: [], education: [], skills: {}, certifications: []
+  };
+
+  // Experience
+  let i = 0;
+  while (document.getElementById(`pf-exp-${i}`)) {
+    const role    = document.getElementById(`pf-exp-role-${i}`)?.value.trim()   || "";
+    const co      = document.getElementById(`pf-exp-co-${i}`)?.value.trim()     || "";
+    const dates   = document.getElementById(`pf-exp-dates-${i}`)?.value.trim()  || "";
+    const bullets = (document.getElementById(`pf-exp-bullets-${i}`)?.value || "").split("\n").map(s=>s.trim()).filter(Boolean);
+    if (role || co) p.experience.push({ id: `exp_${String(i+1).padStart(3,"0")}`, role, co, dates, bullets });
+    i++;
+  }
+
+  // Projects
+  i = 0;
+  while (document.getElementById(`pf-proj-${i}`)) {
+    const title   = document.getElementById(`pf-proj-title-${i}`)?.value.trim() || "";
+    const bullets = (document.getElementById(`pf-proj-bullets-${i}`)?.value || "").split("\n").map(s=>s.trim()).filter(Boolean);
+    if (title) p.projects.push({ id: `proj_${String(i+1).padStart(3,"0")}`, title, bullets });
+    i++;
+  }
+
+  // Publications
+  i = 0;
+  while (document.getElementById(`pf-pub-${i}`)) {
+    const title = document.getElementById(`pf-pub-title-${i}`)?.value.trim() || "";
+    const venue = document.getElementById(`pf-pub-venue-${i}`)?.value.trim() || "";
+    const year  = document.getElementById(`pf-pub-year-${i}`)?.value.trim()  || "";
+    const note  = document.getElementById(`pf-pub-note-${i}`)?.value.trim()  || "";
+    if (title) p.publications.push({ title, venue, year, note });
+    i++;
+  }
+
+  // Education
+  i = 0;
+  while (document.getElementById(`pf-edu-${i}`)) {
+    const degree = document.getElementById(`pf-edu-degree-${i}`)?.value.trim() || "";
+    const inst   = document.getElementById(`pf-edu-inst-${i}`)?.value.trim()   || "";
+    const year   = document.getElementById(`pf-edu-year-${i}`)?.value.trim()   || "";
+    const note   = document.getElementById(`pf-edu-note-${i}`)?.value.trim()   || "";
+    if (degree) p.education.push({ degree, inst, year, ...(note ? { note } : {}) });
+    i++;
+  }
+
+  // Skills
+  i = 0;
+  while (document.getElementById(`pf-skill-${i}`)) {
+    const cat   = document.getElementById(`pf-skill-cat-${i}`)?.value.trim()   || "";
+    const items = (document.getElementById(`pf-skill-items-${i}`)?.value || "").split("\n").map(s=>s.trim()).filter(Boolean);
+    if (cat) p.skills[cat] = items;
+    i++;
+  }
+
+  // Certifications
+  p.certifications = (document.getElementById("pf-certifications")?.value || "").split("\n").map(s=>s.trim()).filter(Boolean);
+
+  return p;
+}
+
+function profileAddExperience() {
+  const p = _profileGetCurrent();
+  p.experience.push({ id: "", role: "", co: "", dates: "", bullets: [] });
+  _profileReloadSections(p);
+}
+function profileAddProject() {
+  const p = _profileGetCurrent();
+  p.projects.push({ id: "", title: "", bullets: [] });
+  _profileReloadSections(p);
+}
+function profileAddPublication() {
+  const p = _profileGetCurrent();
+  p.publications.push({ title: "", venue: "", year: "", note: "" });
+  _profileReloadSections(p);
+}
+function profileAddEducation() {
+  const p = _profileGetCurrent();
+  p.education.push({ degree: "", inst: "", year: "", note: "" });
+  _profileReloadSections(p);
+}
+function profileAddSkillCategory() {
+  const p = _profileGetCurrent();
+  p.skills["New Category"] = [];
+  _profileReloadSections(p);
+}
+
+function _profileRemoveExp(i) {
+  const p = _profileGetCurrent();
+  p.experience.splice(i, 1);
+  _profileReloadSections(p);
+}
+function _profileRemoveProject(i) {
+  const p = _profileGetCurrent();
+  p.projects.splice(i, 1);
+  _profileReloadSections(p);
+}
+function _profileRemovePublication(i) {
+  const p = _profileGetCurrent();
+  p.publications.splice(i, 1);
+  _profileReloadSections(p);
+}
+function _profileRemoveEducation(i) {
+  const p = _profileGetCurrent();
+  p.education.splice(i, 1);
+  _profileReloadSections(p);
+}
+function _profileRemoveSkillCategory(i) {
+  const p = _profileGetCurrent();
+  const keys = Object.keys(p.skills);
+  if (keys[i]) delete p.skills[keys[i]];
+  _profileReloadSections(p);
+}
+
+function _profileReloadSections(p) {
+  // Re-render only the dynamic list sections without losing personal field values
+  const expList  = document.getElementById("pf-experience-list");   expList.innerHTML  = "";
+  const projList = document.getElementById("pf-projects-list");     projList.innerHTML = "";
+  const pubList  = document.getElementById("pf-publications-list"); pubList.innerHTML  = "";
+  const eduList  = document.getElementById("pf-education-list");    eduList.innerHTML  = "";
+  const sklList  = document.getElementById("pf-skills-list");       sklList.innerHTML  = "";
+
+  (p.experience    || []).forEach((e, i)   => _profileRenderExp(e, i));
+  (p.projects      || []).forEach((pr, i)  => _profileRenderProject(pr, i));
+  (p.publications  || []).forEach((pub, i) => _profileRenderPublication(pub, i));
+  (p.education     || []).forEach((e, i)   => _profileRenderEducation(e, i));
+  Object.entries(p.skills || {}).forEach(([cat, items], i) => _profileRenderSkillCategory(cat, items, i));
+}
+
+function profileSave() {
+  const p = _profileGetCurrent();
+  try {
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(p));
+  } catch (e) {
+    alert("Could not save to localStorage: " + e.message); return;
+  }
+  // Apply to live PROFILE object so tailoring picks it up immediately
+  Object.assign(PROFILE, p);
+  const statusEl = document.getElementById("profile-save-status");
+  statusEl.textContent = "Profile saved. All tailoring will now use this profile.";
+  statusEl.style.display = "";
+  setTimeout(() => { statusEl.style.display = "none"; }, 3000);
+}
+
+function profileExportJS() {
+  const p = _profileGetCurrent();
+  const js = `/**\n * profile.js — CV Fit Studio profile\n * Generated ${new Date().toISOString().slice(0,10)}\n */\n\nconst PROFILE = ${JSON.stringify(p, null, 2)};\n`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([js], { type: "text/javascript" }));
+  a.download = "profile.js"; a.click();
 }
 
 // ── health / settings ──────────────────────────────────────────
@@ -82,7 +389,22 @@ function parseJSON(raw) {
   let s = raw.replace(/```json|```/g, "").trim();
   const a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a !== -1 && b !== -1) s = s.slice(a, b + 1);
-  return JSON.parse(s);
+  // Escape literal control characters inside JSON string values
+  // (Claude sometimes emits raw \n, \t inside strings which breaks JSON.parse)
+  let out = "", inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc)          { out += c; esc = false; continue; }
+    if (c === "\\")   { out += c; esc = true;  continue; }
+    if (c === '"')    { out += c; inStr = !inStr; continue; }
+    if (inStr) {
+      if      (c === "\n") { out += "\\n";  continue; }
+      else if (c === "\r") { out += "\\r";  continue; }
+      else if (c === "\t") { out += "\\t";  continue; }
+    }
+    out += c;
+  }
+  return JSON.parse(out);
 }
 
 // ── role strategy ──────────────────────────────────────────────
@@ -599,80 +921,413 @@ async function runFitAnalysis() {
 }
 
 async function generateCV() {
-  console.log("Generating CV with current JD and settings...");
   const jd = document.getElementById("jd-ta").value.trim();
   if (!jd) { showTailorErr("Paste a job description first."); return; }
-  const variant = document.getElementById("cv-variant").value;
   const intensity = document.getElementById("tailor-intensity").value;
-  const coverMode = document.getElementById("want-cover").value; // "yes" | "no" | "cover-only"
-  const wantCover = coverMode !== "no";
-  const coverOnly = coverMode === "cover-only";
-  const tone = document.getElementById("cover-tone").value;
-  const emph = document.getElementById("emph-notes").value;
-  const role = ROLES.find(r => r.id === variant) || ROLES[0];
   clearTailorErr();
+  await _runGenerateCV(jd, intensity);
+}
 
+async function _runGenerateCV(jd, intensity, fitMap = null) {
+  const emph = document.getElementById("emph-notes").value;
   switchTab("output");
   document.getElementById("out-loading").style.display = "flex";
-  document.getElementById("out-msg").textContent = coverOnly ? "Drafting cover letter..." : "Rewriting bullets and generating tailored CV...";
+  document.getElementById("out-msg").textContent = "Analysing JD and tailoring CV...";
   document.getElementById("out-area").style.display = "none";
+  document.getElementById("out-delta").style.display = "none";
   document.getElementById("out-empty").style.display = "none";
 
-  try {
-    let data;
-
-    if (coverOnly) {
-      const sys = `You are an expert cover letter writer for AI/ML/Semantic Web roles.
-Tone: ${tone}. Exactly 3 paragraphs. No opening "I am writing to apply". Lead with the research story.
-Return ONLY valid JSON — no markdown fences:
-{ "cover_letter": "full cover letter text", "match_score": 0-100, "key_changes": "1 sentence on why this letter fits the role" }`;
-      const raw = await callClaude(sys,
-        `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}`
-      );
-      data = parseJSON(raw);
-    } else {
-      const sys = `You are an elite CV writer specialising in AI/ML/Semantic Web roles. You have this candidate's full profile.
+  const sys = `You are an elite CV writer. Read the job description carefully and tailor the candidate's CV specifically for what this role requires.
 
 CANDIDATE: Naga Sowjanya Barla — AI Research Engineer (University of Liverpool, Apr 2026–present) + Research Intern (2025) + 13 yrs production backend (TCS). MSc Data Science & AI (Distinction, Liverpool). Published ESWC 2026. KG-RAG, LLM orchestration, SPARQL, RDF, Python, Java, Spring Boot.
 
-CRITICAL RULES:
-- Bullets must be genuinely rewritten — not just keyword-injected. Use strong action verbs. Quantify anything quantifiable. Cut bullets that add no signal.
-- CV variant: ${role.label}. Tailor section ordering and bullet emphasis for this track.
-- Intensity: ${intensity}. ${intensity === "sharp" ? "Substantially rewrite bullets; restructure if it helps." : intensity === "moderate" ? "Strengthen and sharpen; keep structure mostly intact." : "Light touch only — minimal changes."}
-- Candidate emphasis notes: ${emph}
-- Cover letter tone: ${tone}. Exactly 3 paragraphs. No opening "I am writing to apply". Lead with the research story.
-- Track-specific ordering: ${variant === "kg" || variant === "research" ? "Lead with ESWC paper and KG-RAG work. TCS shows scale but is secondary." : variant === "java" ? "Lead with TCS backend depth. AI/research work is a differentiator, secondary." : "Lead with RAG/LLM credentials and publication. TCS shows production scale."}
-
+TAILORING RULES:
+- Read the JD first. Identify the top 3-5 things this employer actually cares about.
+- Order sections and bullets to surface what matters most for THIS role specifically.
+- Rewrite bullets to mirror the JD's language and priorities — not generic CV language.
+- Intensity: ${intensity}. ${intensity === "sharp" ? "Substantially rewrite bullets; restructure if it helps." : intensity === "moderate" ? "Strengthen and sharpen; keep structure mostly intact." : "Light touch — minimal changes, preserve voice."}
+- Use strong action verbs. Quantify anything quantifiable. Cut bullets that add no signal for this role.
+- Do NOT invent facts, metrics, or experience that isn't in the profile.
+- Do NOT use em dashes (—) or en dashes (–) anywhere. Use a comma and space instead.
+${emph ? `- Additional emphasis: ${emph}` : ""}
+${fitMap ? `
+FIT ANALYSIS (use this to guide tailoring):
+- Overall fit: ${fitMap.score?.overall ?? "?"}%
+- Top requirements and evidence states:
+${(fitMap.requirements || []).map(r => `  • [${r.importance}/${r.evidence_state}] ${r.text}`).join("\n")}
+- Missing/unsupported requirements (do NOT fabricate — acknowledge gaps honestly or omit): ${(fitMap.score?.missing_high_priority || []).join(", ") || "none"}
+- Rewritten bullets from alignment analysis (use these as a starting point where applicable):
+${(fitMap.rewritten_bullets || []).map(b => `  • ${b.original} → ${b.rewritten}`).join("\n")}
+- Hiring manager concern: ${fitMap.verdict?.biggest_doubt || "none"}
+- Suggested fix: ${fitMap.verdict?.fix || "none"}
+` : ""}
 Return ONLY valid JSON — no markdown fences:
 {
-  "headline": "role-specific headline, max 8 words",
-  "summary": "tailored 3-sentence summary — mention ESWC paper, be specific to the role",
+  "headline": "role-specific headline derived from the JD, max 8 words",
+  "summary": "tailored 3-sentence summary specific to what this role needs",
   "experience": [ { "id":"", "role":"", "co":"", "dates":"", "bullets":[] } ],
   "projects": [ { "id":"", "title":"", "bullets":[] } ],
-  "cover_letter": "full cover letter text, or empty string if not requested",
   "match_score": 0-100,
-  "key_changes": "2 sentence summary of what was changed and why"
+  "key_changes": "2 sentences on what you emphasised and why based on the JD",
+  "changes": [{"section":"summary|experience|project","block_name":"e.g. AI Research Engineer","original":"original bullet or summary text","revised":"rewritten text","reason":"why this change fits the JD"}]
 }`;
-      const raw = await callClaude(sys,
-        `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}\n\nGenerate cover letter: ${wantCover}`
-      );
-      data = parseJSON(raw);
-    }
 
-    lastOutput = { data, wantCover, coverOnly, role, jd };
-    renderOutput(data, wantCover, coverOnly, role);
-    document.getElementById("out-area").style.display = "block";
-    document.getElementById("cover-tab-btn").style.display = wantCover ? "" : "none";
-    if (coverOnly) switchOut("cover");
-  } catch (e) {
-    document.getElementById("out-loading").innerHTML = `<span style="color:var(--red)">Generation failed: ${e.message}</span>`;
-  } finally {
+  try {
+    const raw = await callClaude(sys,
+      `FULL PROFILE:\n${JSON.stringify(PROFILE)}\n\nJOB DESCRIPTION:\n${jd}`,
+      8000
+    );
+    const data = parseJSON(raw);
+    lastOutput = { data, wantCover: false, coverOnly: false, jd };
     document.getElementById("out-loading").style.display = "none";
+    if ((data.changes || []).length > 0) {
+      renderDeltaReview(data, false);
+    } else {
+      renderOutput(data, false, false);
+      document.getElementById("out-area").style.display = "block";
+      _showMarkAppliedRow();
+    }
+  } catch (e) {
+    document.getElementById("out-loading").style.display = "none";
+    document.getElementById("out-empty").innerHTML =
+      `<div class="alert alert-err">Generation failed: ${e.message}<br><small style="opacity:.8">Check your API key in Settings and try again.</small></div>`;
+    document.getElementById("out-empty").style.display = "";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Delta review — show before/after changes, editable
+// ═══════════════════════════════════════════════════════════════
+
+function renderDeltaReview(data, wantCover) {
+  const container = document.getElementById("delta-cards");
+  container.innerHTML = "";
+
+  if (!(data.changes || []).length) {
+    document.getElementById("out-delta").style.display = "none";
+    renderOutput(data, wantCover, false);
+    document.getElementById("out-area").style.display = "block";
+    _showMarkAppliedRow();
+    return;
+  }
+
+  const sectionBadge = {
+    summary:    { cls: "badge-navy",   label: "Summary" },
+    headline:   { cls: "badge-muted",  label: "Headline" },
+    experience: { cls: "badge-green",  label: "Experience" },
+    project:    { cls: "badge-amber",  label: "Project" },
+  };
+
+  data.changes.forEach((ch, i) => {
+    const b = sectionBadge[ch.section] || { cls: "badge-muted", label: ch.section };
+    const card = document.createElement("div");
+    card.className = "card mb1";
+    card.id = `delta-card-${i}`;
+    card.style.borderLeft = "3px solid var(--border-strong)";
+    card.dataset.approved = "pending";
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:.6rem">
+        <span class="badge ${b.cls}">${b.label}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--navy);flex:1">${escHtml(ch.block_name || "")}</span>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm" id="delta-approve-btn-${i}" onclick="deltaSetApproval(${i}, true)"
+            style="font-size:11px;padding:4px 10px">✓ Approve</button>
+          <button class="btn btn-sm" id="delta-reject-btn-${i}" onclick="deltaSetApproval(${i}, false)"
+            style="font-size:11px;padding:4px 10px">✗ Reject</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Before</div>
+      <div style="font-size:12px;color:var(--muted);background:var(--bg);padding:8px 10px;border-radius:6px;border:1px solid var(--border);line-height:1.6;margin-bottom:.75rem">${escHtml(ch.original || "")}</div>
+      <div id="delta-after-section-${i}">
+        <div style="font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">After (edit if needed)</div>
+        <textarea id="delta-revised-${i}" style="width:100%;font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);line-height:1.6;resize:vertical;min-height:60px">${escAttr(ch.revised || "")}</textarea>
+        ${ch.reason ? `<div style="font-size:11px;color:var(--teal);margin-top:6px">Why: ${escHtml(ch.reason)}</div>` : ""}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  document.getElementById("out-delta").style.display = "";
+  document.getElementById("out-loading").style.display = "none";
+}
+
+function deltaSetApproval(i, approved) {
+  const card = document.getElementById(`delta-card-${i}`);
+  const approveBtn = document.getElementById(`delta-approve-btn-${i}`);
+  const rejectBtn  = document.getElementById(`delta-reject-btn-${i}`);
+  const afterSec   = document.getElementById(`delta-after-section-${i}`);
+  card.dataset.approved = approved ? "true" : "false";
+  if (approved) {
+    card.style.borderLeft = "3px solid var(--teal)";
+    approveBtn.style.cssText = "background:var(--teal);color:#fff;border-color:var(--teal);font-size:11px;padding:4px 10px";
+    rejectBtn.style.cssText  = "font-size:11px;padding:4px 10px";
+    if (afterSec) afterSec.style.display = "";
+  } else {
+    card.style.borderLeft = "3px solid var(--red)";
+    rejectBtn.style.cssText  = "background:var(--red);color:#fff;border-color:var(--red);font-size:11px;padding:4px 10px";
+    approveBtn.style.cssText = "font-size:11px;padding:4px 10px";
+    if (afterSec) afterSec.style.display = "none";
+  }
+}
+
+function deltaApproveAll() {
+  const data = lastOutput && lastOutput.data;
+  if (!data) return;
+  (data.changes || []).forEach((_, i) => deltaSetApproval(i, true));
+}
+
+function deltaRejectAll() {
+  const data = lastOutput && lastOutput.data;
+  if (!data) return;
+  (data.changes || []).forEach((_, i) => deltaSetApproval(i, false));
+}
+
+function escHtml(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function escAttr(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+}
+
+function finalizeFromDelta() {
+  const data = lastOutput && lastOutput.data;
+  if (!data) return;
+
+  const changes = data.changes || [];
+  changes.forEach((ch, i) => {
+    const card = document.getElementById(`delta-card-${i}`);
+    if (!card || card.dataset.approved !== "true") return; // only apply explicitly approved
+
+    const ta = document.getElementById(`delta-revised-${i}`);
+    const edited = ta ? ta.value.trim() : (ch.revised || "");
+
+    if (ch.section === "headline") {
+      data.headline = edited;
+    } else if (ch.section === "summary") {
+      data.summary = edited;
+    } else if (ch.section === "experience") {
+      (data.experience || []).forEach(exp => {
+        const idx = (exp.bullets || []).findIndex(b => b === ch.original);
+        if (idx !== -1) exp.bullets[idx] = edited;
+      });
+    } else if (ch.section === "project") {
+      (data.projects || []).forEach(proj => {
+        const idx = (proj.bullets || []).findIndex(b => b === ch.original);
+        if (idx !== -1) proj.bullets[idx] = edited;
+      });
+    }
+  });
+
+  document.getElementById("out-delta").style.display = "none";
+  renderOutput(data, lastOutput.wantCover, false);
+  document.getElementById("out-area").style.display = "block";
+  switchOut("cv");
+  _showMarkAppliedRow();
+
+  // Download PDF with custom name
+  _downloadPDFWithName(_buildCVFilename());
+}
+
+function _showMarkAppliedRow() {
+  const row = document.getElementById("mark-applied-row");
+  if (row) {
+    row.style.display = "flex";
+    document.getElementById("mark-applied-status").style.display = "none";
+    document.getElementById("mark-applied-btn").disabled = false;
+    document.getElementById("mark-applied-btn").textContent = "Mark as Applied → Save to Tracker";
+  }
+  // Show cover letter trigger
+  const clTrigger = document.getElementById("cover-letter-trigger");
+  if (clTrigger) clTrigger.style.display = "";
+  const clSection = document.getElementById("cover-letter-section");
+  if (clSection) clSection.style.display = "none";
+}
+
+async function generateCoverLetterOnDemand(regenerate) {
+  const jd = _jobMeta.jd || document.getElementById("jd-ta")?.value || "";
+  if (!jd) { alert("No job description found — go back to New Job and paste the JD."); return; }
+
+  // Hide trigger, show section
+  const trigger = document.getElementById("cover-letter-trigger");
+  const section = document.getElementById("cover-letter-section");
+  if (trigger) trigger.style.display = "none";
+  if (section) section.style.display = "";
+
+  const loadingEl = document.getElementById("cl-loading");
+  const outputTa  = document.getElementById("cl-output-ta");
+  const actionsEl = document.getElementById("cl-actions");
+  const regenBtn  = document.getElementById("cl-regen-btn");
+
+  if (!regenerate && outputTa && outputTa.value.trim()) return; // already generated
+
+  loadingEl.style.display = "flex";
+  outputTa.style.display  = "none";
+  actionsEl.style.display = "none";
+
+  const tone = document.getElementById("cl-tone")?.value || "professional";
+  const company = _jobMeta.company || "";
+  const jobTitle = _jobMeta.title || "";
+
+  const sys = `You are an expert cover letter writer for AI/ML/Semantic Web roles.
+Tone: ${tone}. Exactly 3 paragraphs. No opening "I am writing to apply". Lead with the research story.
+Company: ${company}. Role: ${jobTitle}.
+Return ONLY the cover letter text — no JSON, no markdown fences.`;
+
+  try {
+    const raw = await callClaude(sys,
+      `FULL PROFILE:\n${JSON.stringify(PROFILE, null, 2)}\n\nJOB DESCRIPTION:\n${jd}`
+    );
+    outputTa.value = raw.trim();
+    _renderCLPreview(raw.trim());
+    actionsEl.style.display = "flex";
+    if (regenBtn) regenBtn.style.display = "";
+  } catch (e) {
+    outputTa.value = "Generation failed: " + e.message;
+    outputTa.style.display = "";
+  } finally {
+    loadingEl.style.display = "none";
+  }
+}
+
+function _renderCLPreview(text) {
+  const preview = document.getElementById("cl-preview");
+  const ta      = document.getElementById("cl-output-ta");
+  if (!preview) return;
+  // Render paragraphs separated by blank lines
+  preview.innerHTML = text.split(/\n\n+/)
+    .map(p => `<p style="margin-bottom:1.1rem">${escHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  preview.style.display = "";
+  if (ta) ta.style.display = "none";
+  const editBtn = document.getElementById("cl-edit-btn");
+  if (editBtn) editBtn.textContent = "Edit";
+}
+
+function _toggleCLEdit() {
+  const preview = document.getElementById("cl-preview");
+  const ta      = document.getElementById("cl-output-ta");
+  const btn     = document.getElementById("cl-edit-btn");
+  if (!preview || !ta) return;
+  const editing = ta.style.display !== "none";
+  if (editing) {
+    // switching back to preview — re-render with any edits
+    _renderCLPreview(ta.value);
+    if (btn) btn.textContent = "Edit";
+  } else {
+    preview.style.display = "none";
+    ta.style.display = "";
+    ta.focus();
+    if (btn) btn.textContent = "Done editing";
+  }
+}
+
+function _downloadCLText() {
+  const text = document.getElementById("cl-output-ta")?.value || "";
+  if (!text) return;
+  const filename = _buildCVFilename().replace("_CV", "_CoverLetter") + ".txt";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = filename; a.click();
+}
+
+async function _downloadCLPDF() {
+  const text = document.getElementById("cl-output-ta")?.value || "";
+  if (!text) return;
+  const name    = PROFILE.name || "Candidate";
+  const company = _jobMeta.company || "";
+  const title   = _jobMeta.title   || "";
+  const today   = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
+  const esc = s => (s||"").replace(/&/g,"\\&").replace(/%/g,"\\%").replace(/#/g,"\\#").replace(/_/g,"\\_").replace(/\$/g,"\\$");
+  const paras = text.split(/\n\n+/).map(p =>
+    p.split(/\n/).map(l => esc(l)).join("\\\\\n") + "\n\n"
+  ).join("\\medskip\n");
+  const latex = `\\documentclass[a4paper,11pt]{letter}
+\\usepackage[T1]{fontenc}\\usepackage[utf8]{inputenc}\\usepackage{lmodern}
+\\usepackage[top=1.1in,bottom=1in,left=1.1in,right=1.1in]{geometry}
+\\usepackage[hidelinks]{hyperref}
+\\usepackage{xcolor}\\definecolor{navy}{HTML}{1A3C5E}
+\\setlength{\\parindent}{0pt}\\setlength{\\parskip}{0pt}
+\\pagestyle{empty}
+\\begin{document}
+{\\large\\bfseries\\color{navy}${esc(name)}}\\\\
+{\\small ${esc(PROFILE.email||"")} $\\cdot$ ${esc(PROFILE.location||"")}}\\\\[18pt]
+${esc(today)}\\\\[10pt]
+${company ? `{\\bfseries ${esc(company)}}\\\\` : ""}
+${title   ? `{\\itshape  ${esc(title)}}\\\\[14pt]`   : "\\vspace{14pt}"}
+\\noindent Dear Hiring Manager,\\\\[10pt]
+${paras}
+\\noindent Yours sincerely,\\\\[28pt]
+{\\bfseries ${esc(name)}}
+\\end{document}`;
+  const btn = document.querySelector("#cl-actions .btn-primary");
+  if (btn) { btn.disabled = true; btn.textContent = "Compiling..."; }
+  try {
+    const r = await fetch("/api/pdf", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latex })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = _buildCVFilename().replace("_CV","_CoverLetter") + ".pdf"; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("PDF failed: " + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Download PDF"; }
+  }
+}
+
+async function markAsApplied() {
+  const btn = document.getElementById("mark-applied-btn");
+  const statusEl = document.getElementById("mark-applied-status");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  statusEl.style.display = "";
+  statusEl.textContent = "";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cvLatex = document.getElementById("out-latex")?.textContent || "";
+  const jdText = _jobMeta.jd || document.getElementById("jd-ta")?.value || "";
+
+  const payload = {
+    date_applied:       today,
+    company:            _jobMeta.company || "",
+    job_title:          _jobMeta.title   || "",
+    job_url:            _jobMeta.url     || "",
+    location:           _jobMeta.location || "",
+    contract_type:      _jobMeta.contract || "Permanent",
+    day_rate_or_salary: _jobMeta.salary  || "",
+    source:             _jobMeta.source  || "",
+    status:             "applied",
+    cv_variant:         (lastOutput?.role?.label) || "",
+    cv_latex:           cvLatex,
+    jd_text:            jdText,
+    notes:              "",
+  };
+
+  try {
+    const r = await fetch("/api/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Save failed");
+    btn.textContent = "✓ Saved";
+    statusEl.textContent = "Application saved to tracker.";
+    statusEl.style.color = "var(--teal)";
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "Mark as Applied → Save to Tracker";
+    statusEl.textContent = "Error: " + e.message;
+    statusEl.style.color = "var(--red)";
   }
 }
 
 // ── output rendering ───────────────────────────────────────────
-function renderOutput(data, wantCover, coverOnly, role) {
+function renderOutput(data, wantCover, coverOnly) {
   const sc = data.match_score || 0;
   document.getElementById("out-metrics").innerHTML = `
     <div class="metric"><div class="metric-val">${sc}%</div><div class="metric-lbl">estimated match</div></div>
@@ -690,7 +1345,7 @@ function renderOutput(data, wantCover, coverOnly, role) {
   let h = `
     <div style="margin-bottom:1.5rem">
       <div style="font-size:22px;font-weight:700;color:var(--navy)">${PROFILE.name}</div>
-      <div style="font-size:13px;color:var(--muted);font-style:italic;margin-top:2px">${data.headline || role.label}</div>
+      <div style="font-size:13px;color:var(--muted);font-style:italic;margin-top:2px">${data.headline || "Tailored CV"}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:5px">${PROFILE.email} · ${PROFILE.phone} · ${PROFILE.location}</div>
       <div style="font-size:12px;color:var(--muted)">${PROFILE.linkedin} · ${PROFILE.github}</div>
     </div>`;
@@ -724,10 +1379,21 @@ function renderOutput(data, wantCover, coverOnly, role) {
     });
   }
 
+  if ((PROFILE.publications || []).length) {
+    h += `<div class="cv-section">Publications</div>`;
+    PROFILE.publications.forEach(p => {
+      h += `<div style="margin-bottom:6px;font-size:13px">
+        <strong>${p.title}</strong><br>
+        <span style="color:var(--muted)">${p.venue}, ${p.year}</span>
+        ${p.note ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${p.note}</div>` : ""}
+      </div>`;
+    });
+  }
+
   h += `<div class="cv-section">Education</div>`;
   PROFILE.education.forEach(e => {
     h += `<div style="margin-bottom:6px;font-size:13px">
-      <strong>${e.degree}</strong> — ${e.inst} <span style="color:var(--muted)">${e.year || ""}</span>
+      <strong>${e.degree}</strong>, ${e.inst} <span style="color:var(--muted)">${e.year || ""}</span>
       ${e.note ? `<div style="font-size:12px;color:var(--muted)">${e.note}</div>` : ""}
     </div>`;
   });
@@ -736,6 +1402,11 @@ function renderOutput(data, wantCover, coverOnly, role) {
   Object.entries(PROFILE.skills).forEach(([cat, items]) => {
     h += `<div style="font-size:13px;margin-bottom:4px"><strong>${cat}:</strong> ${items.join(", ")}</div>`;
   });
+
+  if ((PROFILE.certifications || []).length) {
+    h += `<div class="cv-section">Certifications</div>`;
+    h += `<ul class="cv-bullets">` + PROFILE.certifications.map(c => `<li style="font-size:13px">${c}</li>`).join("") + `</ul>`;
+  }
 
   document.getElementById("out-cv").innerHTML = h;
 
@@ -748,7 +1419,7 @@ function renderOutput(data, wantCover, coverOnly, role) {
   // Plain text
   const lines = [
     PROFILE.name,
-    data.headline || role.label,
+    data.headline || "Tailored CV",
     `${PROFILE.email} | ${PROFILE.phone} | ${PROFILE.location}`,
     PROFILE.linkedin,
     ""
@@ -766,8 +1437,13 @@ function renderOutput(data, wantCover, coverOnly, role) {
     (e.bullets || []).forEach(b => lines.push("• " + b));
     lines.push("");
   });
+  if ((PROFILE.publications || []).length) {
+    lines.push("PUBLICATIONS");
+    PROFILE.publications.forEach(p => lines.push(`${p.title}. ${p.venue}, ${p.year}.`));
+    lines.push("");
+  }
   lines.push("EDUCATION");
-  PROFILE.education.forEach(e => lines.push(`${e.degree} — ${e.inst} ${e.year || ""}`));
+  PROFILE.education.forEach(e => lines.push(`${e.degree}, ${e.inst} ${e.year || ""}`));
   lines.push("");
   lines.push("SKILLS");
   Object.entries(PROFILE.skills).forEach(([c, i]) => lines.push(`${c}: ${i.join(", ")}`));
@@ -775,15 +1451,16 @@ function renderOutput(data, wantCover, coverOnly, role) {
   document.getElementById("out-plain").textContent = lines.join("\n");
 
   // LaTeX
-  document.getElementById("out-latex").textContent = buildLatex(data, wantCover, role);
+  document.getElementById("out-latex").textContent = buildLatex(data, wantCover);
 }
 
-function buildLatex(data, wantCover, role) {
+function buildLatex(data, wantCover) {
   const esc = s => (s || "")
+    .replace(/\u2014/g, ", ").replace(/\u2013/g, ", ")  // em/en dash → ", "
     .replace(/&/g, "\\&").replace(/%/g, "\\%").replace(/#/g, "\\#")
     .replace(/_/g, "\\_").replace(/\$/g, "\\$").replace(/~/g, "\\textasciitilde{}");
 
-  let tex = `% Generated by CV Fit Studio — ${role.label}\n`;
+  let tex = `% Generated by CV Fit Studio\n`;
   tex += `\\documentclass[a4paper,10pt]{article}\n`;
   tex += `\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n\\usepackage{lmodern}\n`;
   tex += `\\usepackage{geometry}\n\\usepackage{enumitem}\n\\usepackage[hidelinks]{hyperref}\n`;
@@ -798,7 +1475,7 @@ function buildLatex(data, wantCover, role) {
   // Header
   tex += `\\begin{center}\n`;
   tex += `  {\\fontsize{24}{28}\\selectfont\\bfseries\\color{navy}${esc(PROFILE.name)}}\\par\\vspace{4pt}\n`;
-  tex += `  {\\small\\color{muted}\\textit{${esc(data.headline || role.label)}}}\\par\\vspace{3pt}\n`;
+  tex += `  {\\small\\color{muted}\\textit{${esc(data.headline || "Tailored CV")}}}\\par\\vspace{3pt}\n`;
   tex += `  {\\footnotesize\\color{muted}${esc(PROFILE.location)} $\\cdot$ ${esc(PROFILE.phone)} $\\cdot$ ${esc(PROFILE.email)}}\\par\\vspace{2pt}\n`;
   tex += `  {\\footnotesize\\color{muted}\\href{${PROFILE.linkedin}}{LinkedIn} $\\cdot$ \\href{${PROFILE.github}}{GitHub}}\n`;
   tex += `\\end{center}\n\\vspace{4pt}{\\color{navy}\\hrule height 0.8pt}\\vspace{6pt}\n\n`;
@@ -830,6 +1507,17 @@ function buildLatex(data, wantCover, role) {
       tex += `\\end{itemize}\\vspace{4pt}\n`;
     });
     tex += "\n";
+  }
+
+  // Publications
+  if ((PROFILE.publications || []).length) {
+    tex += `\\section{Publications}\n`;
+    PROFILE.publications.forEach(p => {
+      tex += `\\noindent{\\small\\color{body}${esc(p.title)}}\\par\n`;
+      tex += `\\noindent{\\small\\color{muted}\\textit{${esc(p.venue)}, ${esc(p.year)}}}`;
+      if (p.note) tex += `\\par\\noindent{\\small\\color{muted}${esc(p.note)}}`;
+      tex += `\\vspace{5pt}\n\n`;
+    });
   }
 
   // Education
@@ -1233,7 +1921,7 @@ Return ONLY valid JSON (no markdown): {"headline":"","summary":"","experience":[
     // Build plain text
     const lines = [
       PROFILE.name,
-      data.headline || role.label,
+      data.headline || "Tailored CV",
       `${PROFILE.email} | ${PROFILE.phone} | ${PROFILE.location}`,
       PROFILE.linkedin, "",
     ];
@@ -1254,7 +1942,7 @@ Return ONLY valid JSON (no markdown): {"headline":"","summary":"","experience":[
     if (data.key_changes) { lines.push("", "--- TAILORING NOTES ---", data.key_changes); }
 
     document.getElementById("apply-cv-plain").textContent = lines.join("\n");
-    _applyCVLatex = buildLatex(data, false, role);
+    _applyCVLatex = buildLatex(data, false);
 
     document.getElementById("apply-cv-area").style.display = "";
     btn.textContent = "↻ Re-generate";
@@ -1748,39 +2436,43 @@ async function _pollApplyStatus(jobId) {
 }
 
 // ── PDF download ───────────────────────────────────────────────
-async function downloadPDF() {
-  const latex = document.getElementById("out-latex").textContent;
-  if (!latex || latex.length < 100) {
-    alert("Generate a CV first, then switch to the LaTeX tab before downloading PDF.");
-    return;
-  }
+function _buildCVFilename() {
+  // e.g. "NagaSowjanya_SkyTech_CV" from "Naga Sowjanya Barla" and company "Sky Technologies"
+  const nameParts = (PROFILE.name || "Candidate").split(" ");
+  const shortName = nameParts.slice(0, 2).map(p => p.replace(/[^a-zA-Z]/g, "")).join("");
+  const company = (_jobMeta.company || "").trim();
+  const acronym = company
+    ? company.split(/\s+/).filter(w => w.length > 2).map(w => w[0].toUpperCase()).join("") || company.replace(/\s+/g, "").slice(0, 6).toUpperCase()
+    : "CV";
+  return `${shortName}_${acronym}_CV`;
+}
+
+async function _downloadPDFWithName(filename) {
+  const latex = document.getElementById("out-latex")?.textContent;
+  if (!latex) { alert("Generate the CV first."); return; }
   const btn = document.getElementById("pdf-btn");
-  const orig = btn.textContent;
-  btn.textContent = "Compiling...";
-  btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = "Compiling PDF..."; }
   try {
     const r = await fetch("/api/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ latex, filename: "cv_tailored" })
+      body: JSON.stringify({ latex })
     });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(err.detail || "PDF generation failed");
-    }
+    if (!r.ok) throw new Error(await r.text());
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = _autoName("cv") + ".pdf";
-    a.click();
+    a.href = url; a.download = filename + ".pdf"; a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
-    alert("PDF error: " + e.message);
+    alert("PDF failed: " + e.message);
   } finally {
-    btn.textContent = orig;
-    btn.disabled = false;
+    if (btn) { btn.disabled = false; btn.textContent = "Download PDF"; }
   }
+}
+
+async function downloadPDF() {
+  await _downloadPDFWithName(_buildCVFilename());
 }
 
 // ── Tracker / Kanban ───────────────────────────────────────────
@@ -2271,6 +2963,228 @@ function _applyParsedFields(fields) {
   }
   if (fields.jd_text && !document.getElementById("na-jd").value)
     document.getElementById("na-jd").value = fields.jd_text;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// New Job (Discover) panel — URL fetch + tailoring
+// ═══════════════════════════════════════════════════════════════
+
+async function fetchDiscoverUrl() {
+  const url = document.getElementById("dsc-url").value.trim();
+  if (!url) return;
+  const btn = document.getElementById("dsc-fetch-btn");
+  const status = document.getElementById("dsc-fetch-status");
+  btn.disabled = true; btn.textContent = "Fetching...";
+  status.textContent = "Fetching page..."; status.style.display = ""; status.style.color = "var(--muted)";
+  try {
+    const r = await fetch("/api/applications/parse-url", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }), signal: AbortSignal.timeout(40000)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Fetch failed");
+    const f = d.fields || {};
+    if (f.company) document.getElementById("dsc-company").value = f.company;
+    if (f.job_title) document.getElementById("dsc-title").value = f.job_title;
+    if (f.location) document.getElementById("dsc-location").value = f.location;
+    if (f.salary) document.getElementById("dsc-salary").value = f.salary;
+    if (f.jd_text) document.getElementById("dsc-jd").value = f.jd_text;
+    const filled = [f.company, f.job_title, f.location, f.jd_text].filter(Boolean).length;
+    status.textContent = filled > 0 ? `Filled ${filled} field${filled !== 1 ? "s" : ""}.` : "No fields extracted — paste the JD below manually.";
+    status.style.color = filled > 0 ? "var(--teal)" : "var(--amber)";
+  } catch (e) {
+    status.textContent = "Could not fetch: " + e.message; status.style.color = "var(--red)";
+  } finally {
+    btn.disabled = false; btn.textContent = "Fetch →";
+  }
+}
+
+async function extractFromDiscoverPageText() {
+  const text = document.getElementById("dsc-page-text").value.trim();
+  if (!text) return;
+  const btn = document.getElementById("dsc-extract-btn");
+  const status = document.getElementById("dsc-fetch-status");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:13px;height:13px;border-width:2px;vertical-align:middle;margin-right:5px"></span>Extracting...';
+  status.textContent = ""; status.style.display = "none";
+  try {
+    const r = await fetch("/api/applications/parse-text", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    const f = d.fields || {};
+    if (f.company) document.getElementById("dsc-company").value = f.company;
+    if (f.job_title) document.getElementById("dsc-title").value = f.job_title;
+    if (f.location) document.getElementById("dsc-location").value = f.location;
+    if (f.salary) document.getElementById("dsc-salary").value = f.salary;
+    if (f.jd_text) document.getElementById("dsc-jd").value = f.jd_text;
+    status.textContent = "Fields extracted."; status.style.color = "var(--teal)"; status.style.display = "";
+  } catch (e) {
+    status.textContent = "Extract failed: " + e.message; status.style.color = "var(--red)"; status.style.display = "";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Extract fields →";
+  }
+}
+
+let _fitAnalysisResult = null; // stored between fit step and generate step
+
+async function tailorFromDiscover() {
+  const jd = document.getElementById("dsc-jd").value.trim();
+  const errEl = document.getElementById("dsc-error");
+  errEl.style.display = "none";
+  if (!jd) { errEl.textContent = "Paste a job description first."; errEl.style.display = ""; return; }
+
+  // Reset state for new job
+  _fitAnalysisResult = null;
+  const clSection = document.getElementById("cover-letter-section");
+  const clTrigger = document.getElementById("cover-letter-trigger");
+  const clTa      = document.getElementById("cl-output-ta");
+  if (clSection) clSection.style.display = "none";
+  if (clTrigger) clTrigger.style.display = "none";
+  if (clTa)      clTa.value = "";
+
+  // Store job metadata
+  _jobMeta = {
+    company:  document.getElementById("dsc-company").value.trim(),
+    title:    document.getElementById("dsc-title").value.trim(),
+    location: document.getElementById("dsc-location").value.trim(),
+    salary:   document.getElementById("dsc-salary").value.trim(),
+    source:   document.getElementById("dsc-source").value,
+    contract: document.getElementById("dsc-contract").value,
+    url:      document.getElementById("dsc-url").value.trim(),
+    jd,
+  };
+  document.getElementById("jd-ta").value = jd;
+  document.getElementById("tailor-intensity").value = document.getElementById("dsc-intensity").value;
+
+  // Switch to output panel and show loading
+  switchTab("output");
+  lastOutput = null; // prevent "nothing generated" guard from hiding the loader
+  document.getElementById("out-loading").style.display = "flex";
+  document.getElementById("out-msg").textContent = "Analysing fit against job description...";
+  document.getElementById("out-fit").style.display = "none";
+  document.getElementById("out-delta").style.display = "none";
+  document.getElementById("out-area").style.display = "none";
+  document.getElementById("out-empty").style.display = "none";
+
+  try {
+    const cvText = _buildPlainCVText();
+    const r = await fetch("/api/align/full", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cv_text: cvText, jd_text: jd, clarifications: {} })
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    const { alignment_map: map } = await r.json();
+    _fitAnalysisResult = map;
+    document.getElementById("out-loading").style.display = "none";
+    _renderFitSummary(map);
+  } catch (e) {
+    document.getElementById("out-loading").style.display = "none";
+    document.getElementById("out-empty").innerHTML =
+      `<div class="alert alert-err">Fit analysis failed: ${e.message}</div>`;
+    document.getElementById("out-empty").style.display = "";
+  }
+}
+
+function _buildPlainCVText() {
+  // Build a plain text representation of the full profile for the alignment API
+  const lines = [PROFILE.name, `${PROFILE.email} | ${PROFILE.location}`, ""];
+  if ((PROFILE.publications || []).length) {
+    lines.push("PUBLICATIONS");
+    PROFILE.publications.forEach(p => lines.push(`${p.title}. ${p.venue}, ${p.year}.`));
+    lines.push("");
+  }
+  lines.push("EXPERIENCE");
+  (PROFILE.experience || []).forEach(e => {
+    lines.push(`${e.role} | ${e.co} | ${e.dates || ""}`);
+    (e.bullets || []).forEach(b => lines.push("• " + b));
+    lines.push("");
+  });
+  lines.push("PROJECTS");
+  (PROFILE.projects || []).forEach(p => {
+    lines.push(p.title);
+    (p.bullets || []).forEach(b => lines.push("• " + b));
+    lines.push("");
+  });
+  lines.push("EDUCATION");
+  PROFILE.education.forEach(e => lines.push(`${e.degree}, ${e.inst} ${e.year || ""}`));
+  lines.push("");
+  lines.push("SKILLS");
+  Object.entries(PROFILE.skills).forEach(([c, i]) => lines.push(`${c}: ${i.join(", ")}`));
+  return lines.join("\n");
+}
+
+function _renderFitSummary(map) {
+  const score = map.score || {};
+  const overall = score.overall || 0;
+  const fillCls = overall >= 70 ? "fill-hi" : overall >= 50 ? "fill-mid" : "fill-lo";
+
+  // Score row
+  document.getElementById("fit-score-row").innerHTML = `
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <div class="metric" style="min-width:80px;text-align:center">
+        <div class="metric-val" style="color:${overall>=70?"var(--teal)":overall>=50?"#d97706":"var(--red)"}">${overall}%</div>
+        <div class="metric-lbl">overall fit</div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div class="score-bar" style="height:8px;margin-bottom:6px"><div class="score-fill ${fillCls}" style="width:${overall}%"></div></div>
+        <div style="font-size:12px;color:var(--muted)">${score.keyword_match!=null?`Keywords: ${score.keyword_match}%`:""}
+          ${score.skills_match!=null?` · Skills: ${score.skills_match}%`:""}
+          ${score.seniority_fit!=null?` · Seniority: ${score.seniority_fit}%`:""}</div>
+      </div>
+      ${map.verdict ? `<div class="badge ${map.verdict.would_interview?"badge-green":"badge-red"}" style="font-size:12px;padding:4px 12px">${map.verdict.would_interview?"Would interview":"Needs work"}</div>` : ""}
+    </div>`;
+
+  // Requirements table
+  const reqs = map.requirements || [];
+  if (reqs.length) {
+    const rows = reqs.map(r => {
+      const imp = r.importance === "critical" ? "badge-red" : r.importance === "high" ? "badge-amber" : "badge-muted";
+      const ev  = r.evidence_state === "stated" ? "badge-green" : r.evidence_state === "inferred" ? "badge-amber" : "badge-red";
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;font-size:12px">${r.text}</td>
+        <td style="padding:6px 8px"><span class="badge ${imp}">${r.importance}</span></td>
+        <td style="padding:6px 8px"><span class="badge ${ev}">${r.evidence_state}</span></td>
+      </tr>`;
+    }).join("");
+    document.getElementById("fit-req-table").innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="border-bottom:2px solid var(--border)">
+          <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted)">Requirement</th>
+          <th style="padding:6px 8px;font-size:11px;color:var(--muted)">Importance</th>
+          <th style="padding:6px 8px;font-size:11px;color:var(--muted)">Evidence</th>
+        </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // Missing high-priority
+  const missing = (map.score?.missing_high_priority || []);
+  document.getElementById("fit-gaps-row").innerHTML = missing.length
+    ? `<div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:6px">Gaps to address</div>
+       <div class="tag-row">${missing.map(g => `<span class="tag gap">${g}</span>`).join("")}</div>`
+    : "";
+
+  // Verdict
+  if (map.verdict) {
+    const v = map.verdict;
+    document.getElementById("fit-verdict-row").innerHTML = `
+      <div class="insight ${v.would_interview ? "ok" : "warn"}">
+        <strong>${v.would_interview ? "Likely to interview" : "Unlikely to interview as-is"}</strong><br>
+        ${v.reason || ""}
+        ${v.biggest_doubt ? `<br><span style="color:var(--amber)">Concern: ${v.biggest_doubt}</span>` : ""}
+        ${v.fix ? `<br><span style="color:var(--teal)">Fix: ${v.fix}</span>` : ""}
+      </div>`;
+  }
+
+  document.getElementById("out-fit").style.display = "";
+}
+
+async function generateFromFit() {
+  const jd = _jobMeta.jd || "";
+  const intensity = document.getElementById("tailor-intensity").value;
+  document.getElementById("out-fit").style.display = "none";
+  await _runGenerateCV(jd, intensity, _fitAnalysisResult);
 }
 
 async function fetchJobFromUrl() {
@@ -2898,11 +3812,9 @@ function _renderTailoredOutput(data) {
   const latexEl = document.getElementById('out-latex');
   if (latexEl) latexEl.textContent = _buildLatexFromPlainText(cv);
 
-  // Show LaTeX tab; hide cover (not generated in this flow)
+  // Show LaTeX tab
   const latexTab = document.querySelector(`.out-tab[onclick="switchOut('latex')"]`);
-  const coverTab = document.getElementById('cover-tab-btn');
   if (latexTab) latexTab.style.display = '';
-  if (coverTab) coverTab.style.display = 'none';
   document.getElementById('out-cover').innerHTML = '<p style="color:var(--muted)">Cover letter not generated in Fit Analysis flow.</p>';
 
   // Change log and omitted gaps
